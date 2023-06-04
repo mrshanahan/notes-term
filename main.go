@@ -5,6 +5,7 @@ import (
     "fmt"
     // "io"
     "os"
+    // "os/exec"
     "strings"
     term "golang.org/x/term"
     termios "github.com/pkg/term/termios"
@@ -18,6 +19,10 @@ const (
     BOX_DOUBLE_LOWER_RIGHT = '\u255D'
     BOX_DOUBLE_LOWER_LEFT = '\u255A'
     BOX_DOUBLE_UPPER_LEFT = '\u2554'
+    BOX_DOUBLE_VERTICAL_RIGHT = '\u2560'
+    BOX_DOUBLE_VERTICAL_LEFT = '\u2563'
+    BOX_DOUBLE_HORIZONTAL_DOWN = '\u2566'
+    BOX_DOUBLE_HORIZONTAL_UP = '\u2569'
 
     DEFAULT_BACKGROUND_COLOR = 46 // cyan
     DEFAULT_FOREGROUND_COLOR = 37 // white
@@ -35,6 +40,7 @@ type Window struct {
     Notes []string
     Width int
     Height int
+    LastKey string
 }
 
 var (
@@ -47,6 +53,11 @@ var (
         HIGHLIGHT_FOREGROUND_COLOR,
     }
 )
+
+func SetPalette(p *Palette) {
+    fmt.Printf("\033[%dm", p.Background)
+    fmt.Printf("\033[%dm", p.Foreground)
+}
 
 func (w *Window) GetTextBounds() (int, int, int, int) {
     return 2, w.Height-1, 2, w.Width-1
@@ -81,7 +92,13 @@ func DrawChar(r, c int, b int) {
     fmt.Printf("%c", b)
 }
 
-func DrawBorders(rowmin, rowmax, colmin, colmax int) {
+func DrawString(r, c int, s string) {
+    Move(r, c)
+    fmt.Print(s)
+}
+
+func DrawBorders(window *Window) {
+    rowmin, rowmax, colmin, colmax := window.GetTextBounds()
     bordrowmin, bordrowmax := rowmin-1, rowmax+1
     bordcolmin, bordcolmax := colmin-1, colmax+1
     for c := bordcolmin+1; c <= bordcolmax-1; c++ {
@@ -98,7 +115,28 @@ func DrawBorders(rowmin, rowmax, colmin, colmax int) {
     DrawChar(bordrowmax, bordcolmax, BOX_DOUBLE_LOWER_RIGHT)
 }
 
-func DrawInterior(rowmin, rowmax, colmin, colmax int) {
+func DrawCornerBox(window *Window) {
+    _, rowmax, _, colmax := window.GetTextBounds()
+    boxwidth, boxheight := 20, 1
+    boxcolmin, boxcolmax := colmax-boxwidth, colmax+1
+    boxrowmin, boxrowmax := rowmax-boxheight, rowmax+1
+    for c := boxcolmin; c <= boxcolmax; c++ {
+        DrawChar(boxrowmin, c, BOX_DOUBLE_HORIZONTAL)
+        DrawChar(boxrowmax, c, BOX_DOUBLE_HORIZONTAL)
+    }
+    for r := boxrowmin; r <= boxrowmax; r++ {
+        DrawChar(r, boxcolmin, BOX_DOUBLE_VERTICAL)
+        DrawChar(r, boxcolmax, BOX_DOUBLE_VERTICAL)
+    }
+    DrawChar(boxrowmin, boxcolmin, BOX_DOUBLE_UPPER_LEFT)
+    DrawChar(boxrowmin, boxcolmax, BOX_DOUBLE_VERTICAL_LEFT)
+    DrawChar(boxrowmax, boxcolmin, BOX_DOUBLE_HORIZONTAL_UP)
+    DrawChar(boxrowmax, boxcolmax, BOX_DOUBLE_LOWER_RIGHT)
+    DrawString(boxrowmin+1, boxcolmin+2, window.LastKey)
+}
+
+func DrawInterior(window *Window) {
+    rowmin, rowmax, colmin, colmax := window.GetTextBounds()
     for r := rowmin; r <= rowmax; r++ {
         for c := colmin; c <= colmax; c++ {
             DrawChar(r, c, ' ')
@@ -131,9 +169,9 @@ func DrawNoteRow(window *Window, noteIdx int, palette *Palette) {
 }
 
 func Draw(window *Window) {
-    rowmin, rowmax, colmin, colmax := window.GetTextBounds()
-    DrawBorders(rowmin, rowmax, colmin, colmax)
-    DrawInterior(rowmin, rowmax, colmin, colmax)
+    DrawBorders(window)
+    DrawInterior(window)
+    DrawCornerBox(window)
 
     for i, _ := range window.Notes {
         if i == window.Selection {
@@ -177,6 +215,14 @@ func DisableEcho(fd uintptr) {
     }
 }
 
+func LEBytesToUInt32(bs []byte) uint32 {
+    i := uint32(bs[3])
+    i = i << 8 | uint32(bs[2])
+    i = i << 8 | uint32(bs[1])
+    i = i << 8 | uint32(bs[0])
+    return i
+}
+
 func main() {
     notes := LoadIndex("index.txt")
 
@@ -192,7 +238,6 @@ func main() {
     defer term.Restore(int(fd), oldState)
 
     ClearScreen()
-    c, b := byte(0), []byte{0}
     termw, termh, err := term.GetSize(int(fd))
     if err != nil {
         panic(err)
@@ -204,15 +249,17 @@ func main() {
     SetBackgroundColor()
     defer ResetBackgroundColor()
 
-    window := &Window{0, notes, termw, termh}
+    window := &Window{0, notes, termw, termh, ""}
     Draw(window)
 
-    for c != 'q' {
+    input := byte(0)
+    for input != 'q' {
         // TODO: interrupts
-        os.Stdin.Read(b)
-        c = b[0]
+        inputBuf := make([]byte, 4)
+        os.Stdin.Read(inputBuf)
+        input = inputBuf[0]
         idx := window.Selection
-        switch (c) {
+        switch (input) {
         case 'k':
             if (idx <= 0) {
                 idx = 0
@@ -227,7 +274,11 @@ func main() {
                 idx += 1
             }
             break
+        case '\u000d':
+            fmt.Print("\u0007")
+            break
         }
+        window.LastKey = fmt.Sprintf("0x%x", LEBytesToUInt32(inputBuf))
         window.Selection = idx
         Draw(window)
     }
