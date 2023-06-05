@@ -1,7 +1,6 @@
 package main
 
 import (
-    "bufio"
     "fmt"
     // "io"
     "os"
@@ -37,7 +36,7 @@ type Palette struct {
 
 type Window struct {
     Selection int
-    Notes []string
+    Notes []*IndexEntry
     Width int
     Height int
     LastKey string
@@ -155,7 +154,8 @@ func DrawNoteRow(window *Window, noteIdx int, palette *Palette) {
     fmt.Printf("\033[%dm", palette.Background)
     fmt.Printf("\033[%dm", palette.Foreground)
 
-    contents := window.Notes[noteIdx]
+    note := window.Notes[noteIdx]
+    contents := note.Title
     padding := colmax - rowmin - len(contents) + 1
     if padding < 0 {
         padding = 0
@@ -182,25 +182,6 @@ func Draw(window *Window) {
     }
 }
 
-func LoadIndex(path string) []string {
-    f, err := os.Open(path)
-    if err != nil {
-        panic(err)
-    }
-    defer f.Close()
-
-    lines := []string{}
-    scanner := bufio.NewScanner(f)
-    for scanner.Scan() {
-        line := scanner.Text()
-        lines = append(lines, line)
-    }
-    if err = scanner.Err(); err != nil {
-        panic(err)
-    }
-    return lines
-}
-
 func DisableEcho(fd uintptr) {
     t := &unix.Termios{}
     err := termios.Tcgetattr(fd, t)
@@ -225,6 +206,10 @@ func LEBytesToUInt32(bs []byte) uint32 {
 
 func main() {
     notes := LoadIndex("index.txt")
+    if len(notes) == 0 {
+        fmt.Println("no notes")
+        os.Exit(1)
+    }
 
     fd := os.Stdin.Fd()
     DisableEcho(fd)
