@@ -2,9 +2,8 @@ package main
 
 import (
     "fmt"
-    // "io"
     "os"
-    // "os/exec"
+    "os/exec"
     "strings"
     term "golang.org/x/term"
     termios "github.com/pkg/term/termios"
@@ -204,7 +203,16 @@ func LEBytesToUInt32(bs []byte) uint32 {
     return i
 }
 
-func main() {
+func OpenEditor(path string) {
+    cmd := exec.Command("nvim", path)
+    cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+    err := cmd.Run()
+    if err != nil {
+        panic(err)
+    }
+}
+
+func initState() (*Window, func()) {
     notes := LoadIndex("index.txt")
     if len(notes) == 0 {
         fmt.Println("no notes")
@@ -220,7 +228,7 @@ func main() {
     if err != nil {
         panic(err)
     }
-    defer term.Restore(int(fd), oldState)
+    // defer term.Restore(int(fd), oldState)
 
     ClearScreen()
     termw, termh, err := term.GetSize(int(fd))
@@ -229,13 +237,24 @@ func main() {
     }
 
     HideCursor()
-    defer ShowCursor()
+    // defer ShowCursor()
 
     SetBackgroundColor()
-    defer ResetBackgroundColor()
+    // defer ResetBackgroundColor()
 
     window := &Window{0, notes, termw, termh, ""}
     Draw(window)
+
+    return window, func() {
+        term.Restore(int(fd), oldState)
+        ShowCursor()
+        ResetBackgroundColor()
+    }
+}
+
+func main() {
+    window, cleanup := initState()
+    defer cleanup()
 
     input := byte(0)
     for input != 'q' {
@@ -260,7 +279,7 @@ func main() {
             }
             break
         case '\u000d':
-            fmt.Print("\u0007")
+            OpenEditor(window.Notes[idx].Path)
             break
         }
         window.LastKey = fmt.Sprintf("0x%x", LEBytesToUInt32(inputBuf))
