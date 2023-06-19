@@ -203,6 +203,14 @@ func LEBytesToUInt32(bs []byte) uint32 {
     return i
 }
 
+func LEBytesToString(bs []byte) string {
+    s := "0x"
+    for _, b := range bs {
+        s = fmt.Sprintf("%s%02x", s, b)
+    }
+    return s
+}
+
 func OpenEditor(path string) {
     cmd := exec.Command("nvim", path)
     cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
@@ -248,7 +256,8 @@ func initState() (*Window, func()) {
     return window, func() {
         term.Restore(int(fd), oldState)
         ShowCursor()
-        ResetBackgroundColor()
+        // This might not be needed - everything seems to work w/o it
+        // ResetBackgroundColor()
     }
 }
 
@@ -256,33 +265,35 @@ func main() {
     window, cleanup := initState()
     defer cleanup()
 
-    input := byte(0)
+    var input uint32 = 0
     for input != 'q' {
         // TODO: interrupts
         inputBuf := make([]byte, 4)
         os.Stdin.Read(inputBuf)
-        input = inputBuf[0]
+        input = LEBytesToUInt32(inputBuf)
         idx := window.Selection
         switch (input) {
-        case 'k':
+        case 'k': // up
             if (idx <= 0) {
                 idx = 0
             } else {
                 idx -= 1
             }
             break
-        case 'j':
+        case 'j': // down
             if (idx >= len(window.Notes)-1) {
                 idx = len(window.Notes)-1
             } else {
                 idx += 1
             }
             break
-        case '\u000d':
+        case '\u000e': // CTRL+n
+            break
+        case '\u000d': // Enter
             OpenEditor(window.Notes[idx].Path)
             break
         }
-        window.LastKey = fmt.Sprintf("0x%x", LEBytesToUInt32(inputBuf))
+        window.LastKey = fmt.Sprintf("0x%x", input)
         window.Selection = idx
         Draw(window)
     }
