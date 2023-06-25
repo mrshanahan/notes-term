@@ -1,0 +1,4 @@
+TODO:
+- Only redraw modified parts of screen
+- Experiment with "overridden" methods
+- Redraw on zoom in/out (i.e. on terminal size change)
