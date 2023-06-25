@@ -60,7 +60,7 @@ func initState() (*MainWindow, func()) {
     SetPalette(DefaultPalette)
     // defer ResetBackgroundColor()
 
-    window := &MainWindow{Window{0, 0, termw, termh}, 0, notes, ""}
+    window := &MainWindow{Window{0, 0, termw, termh, true}, 0, notes, ""}
     window.Draw()
 
     return window, func() {
@@ -76,7 +76,7 @@ func main() {
     defer cleanup()
 
     var input uint32 = 0
-    var modal *Modal = nil
+    // var modal *Modal = nil
     for input != 'q' {
         // TODO: interrupts
         inputBuf := make([]byte, 4)
@@ -90,23 +90,16 @@ func main() {
             } else {
                 idx -= 1
             }
-            break
         case 'j': // down
             if (idx >= len(window.Notes)-1) {
                 idx = len(window.Notes)-1
             } else {
                 idx += 1
             }
-            break
         case '\u000e': // CTRL+n
-            modal = window.RequestInput("Create note", []string{"Title", "Test"})
-            modal.Draw()
-            os.Stdin.Read(make([]byte, 4))
-            window.Draw()
-            break
+            window.RequestInput("Create note", []string{"Title", "Test"})
         case '\u000d': // Enter
             OpenEditor(window.Notes[idx].Path)
-            break
         }
         window.LastKey = fmt.Sprintf("0x%x", input)
         window.Selection = idx

@@ -2,6 +2,7 @@ package main
 
 import (
     "fmt"
+    "os"
     "strings"
     // term "golang.org/x/term"
     termios "github.com/pkg/term/termios"
@@ -36,6 +37,7 @@ type Window struct {
     Y int
     Width int
     Height int
+    HasBorders bool
 }
 
 type MainWindow struct {
@@ -47,13 +49,52 @@ type MainWindow struct {
 
 type Modal struct {
     Window
-    Title string
+    Title *TextLabel
     Fields []*ModalField
 }
 
+func NewModal(x, y, w, h int, title string, fields []string) *Modal {
+    titlex, titley := x+2, y+2
+    titleLabel := NewTextLabel(titlex, titley, title)
+
+    fieldy, fieldx := titley+2, titlex+1
+    modalFields := make([]*ModalField, len(fields))
+    for i, f := range fields {
+        modalFields[i] = &ModalField{
+            NewTextLabel(fieldx, fieldy, f),
+            NewTextInput(fieldx, fieldy+1, 70),
+        }
+        fieldy += 6
+    }
+    modal := &Modal{
+        Window{x, y, w, h, true},
+        titleLabel,
+        modalFields,
+    }
+    return modal
+}
+
 type ModalField struct {
-    Label string
+    Label *TextLabel
+    Input *TextInput
+}
+
+type TextLabel struct {
+    Window
     Value string
+}
+
+func NewTextLabel(x, y int, value string) *TextLabel {
+    return &TextLabel{Window{x, y, len(value), 1, false}, value}
+}
+
+type TextInput struct {
+    Window
+    Value string
+}
+
+func NewTextInput(x, y, w int) *TextInput {
+    return &TextInput{Window{x, y, w, 3, true}, ""}
 }
 
 func SetPalette(p *Palette) {
@@ -62,10 +103,15 @@ func SetPalette(p *Palette) {
 }
 
 func (w Window) GetTextBounds() (int, int, int, int) {
-    return w.Y + 2,
-           w.Y + w.Height - 1,
-           w.X + 2,
-           w.X + w.Width - 1
+    posmod, sizemod := 0, 0
+    if w.HasBorders {
+        posmod, sizemod = 2, 1
+    }
+
+    return w.Y + posmod,
+           w.Y + w.Height - sizemod,
+           w.X + posmod,
+           w.X + w.Width - sizemod
 }
 
 func Move(row, col int) {
@@ -99,6 +145,10 @@ func DrawString(r, c int, s string) {
 }
 
 func (window Window) DrawBorders() {
+    if !window.HasBorders {
+        return
+    }
+
     rowmin, rowmax, colmin, colmax := window.GetTextBounds()
     bordrowmin, bordrowmax := rowmin-1, rowmax+1
     bordcolmin, bordcolmax := colmin-1, colmax+1
@@ -184,22 +234,6 @@ func (window *MainWindow) Draw() {
     }
 }
 
-func (modal *Modal) Draw() {
-    modal.DrawBorders()
-
-    rowmin, _, colmin, _ := modal.GetTextBounds()
-
-    titley, titlex := rowmin, colmin
-    DrawString(titley, titlex, modal.Title)
-
-    fieldy, fieldx := titley+2, titlex
-    for _, mf := range modal.Fields {
-        DrawString(fieldy, fieldx, mf.Label)
-        DrawString(fieldy+1, fieldx, "xxxxxxxxxxxxxxxxxx")
-        fieldy += 3
-    }
-}
-
 func DisableEcho(fd uintptr) {
     t := &unix.Termios{}
     err := termios.Tcgetattr(fd, t)
@@ -260,23 +294,123 @@ func Just[T any](x T) *Maybe[T] {
     return &Maybe[T]{x}
 }
 
-func (window *MainWindow) RequestInput(title string, fields []string) *Modal {
+func (label *TextLabel) Draw() {
+    DrawString(label.Y, label.X, label.Value)
+}
+
+func (inp *TextInput) Draw() {
+    y, _, xmin, xmax := inp.GetTextBounds()
+    inp.DrawBorders()
+    strlen := len(inp.Value)
+    DrawString(y, xmin, inp.Value)
+    DrawString(y, xmin+strlen, strings.Repeat(" ", xmax-xmin-strlen))
+}
+
+func (modal *Modal) Draw() {
+    modal.DrawBorders()
+    modal.Title.Draw()
+    for _, mf := range modal.Fields {
+        mf.Label.Draw()
+        mf.Input.Draw()
+    }
+}
+
+func (modal *Modal) SelectField(idx int) {
+    fields := modal.Fields
+    if idx <= len(fields)-1 {
+        f := fields[idx]
+        y, _, x, _ := f.Input.GetTextBounds()
+        valLen := len(f.Input.Value)
+        Move(y, x + valLen)
+        ShowCursor()
+    } else {
+        panic("ahhh")
+    }
+}
+
+func (window *MainWindow) RequestInput(title string, fields []string) { // *Modal {
     rowmin, rowmax, colmin, colmax := window.GetTextBounds()
 
-    minvaluew := 40
+    minvaluew := 80
     maxdescw := len(MaxBy(fields, func(f string) int { return len(f) }).Value)
-    modalw, modalh := Max(minvaluew, maxdescw).Value, len(fields) * 4 + 3
+    modalw, modalh := Max(minvaluew, maxdescw).Value, len(fields) * 6 + 3
     modalx := (colmax - colmin - modalw) / 2
     modaly := (rowmax - rowmin - modalh) / 2
 
-    modalFields := make([]*ModalField, len(fields))
-    for i, f := range fields {
-        modalFields[i] = &ModalField{f, ""}
+    modal := NewModal(modalx, modaly, modalw, modalh, title, fields)
+    modal.Draw()
+
+    ModalEventLoop(window, modal)
+
+    HideCursor()
+    window.Draw()
+}
+
+func ShowErrorModal(err error) {
+}
+
+func (m *Modal) Validate() error {
+    return nil
+}
+
+func (m *Modal) Save() error {
+    return nil
+}
+
+func IsAscii(inp uint32) bool {
+    return inp <= 127
+}
+
+func ModalEventLoop(main *MainWindow, modal *Modal) {
+    idx := 0
+    modal.SelectField(idx)
+    var input uint32 = 0
+    for {
+        inputBuf := make([]byte, 4)
+        os.Stdin.Read(inputBuf)
+        input = LEBytesToUInt32(inputBuf)
+        // TODO: Others to handle:
+        // - CTRL+Backspace
+        // - Delete
+        // - Terminal movement (CTRL+W, etc.)
+        switch (input) {
+        case 0x03, 0x1b: // CTRL+C/ESC
+            return
+        case 0x0d: // ENTER
+            err := modal.Validate()
+            if err == nil {
+                err = modal.Save()
+            }
+            if err == nil {
+                return
+            }
+            ShowErrorModal(err)
+        case 0x09: // TAB
+            if (idx >= len(modal.Fields)-1) {
+                idx = len(modal.Fields)-1
+            } else {
+                idx += 1
+            }
+            modal.SelectField(idx)
+        case 0x5a5b1b: // SHIFT+TAB
+            if (idx <= 0) {
+                idx = 0
+            } else {
+                idx -= 1
+            }
+            modal.SelectField(idx)
+        case 0x7f: // Backspace
+            fieldInput := modal.Fields[idx].Input
+            fieldInput.Value = fieldInput.Value[:len(fieldInput.Value)-1]
+            fieldInput.Draw()
+            modal.SelectField(idx)
+        default:
+            if IsAscii(input) {
+                fieldInput := modal.Fields[idx].Input
+                fieldInput.Value = fmt.Sprintf("%s%c", fieldInput.Value, input)
+                fieldInput.Draw()
+                modal.SelectField(idx)
+            }
+        }
     }
-    modal := &Modal{
-        Window{modalx, modaly, modalw, modalh},
-        title,
-        modalFields,
-    }
-    return modal
 }
