@@ -361,13 +361,12 @@ func (modal *Modal) SelectField(idx int) {
         y, _, x, _ := f.Input.GetTextBounds()
         valLen := len(f.Input.Value)
         Move(y, x + valLen)
-        ShowCursor()
     } else {
         panic("ahhh")
     }
 }
 
-func (window *MainWindow) RequestInput(title string, fields []string) { // *Modal {
+func (window *MainWindow) RequestInput(title string, fields []string) {
     rowmin, rowmax, colmin, colmax := window.GetTextBounds()
 
     minvaluew := 80
@@ -379,9 +378,11 @@ func (window *MainWindow) RequestInput(title string, fields []string) { // *Moda
     modal := NewModal(modalx, modaly, modalw, modalh, title, fields)
     modal.Draw()
 
+    ShowCursor()
+    defer HideCursor()
+
     ModalEventLoop(window, modal)
 
-    HideCursor()
     window.Draw()
 }
 
@@ -390,6 +391,9 @@ func (modal *Modal) ShowErrorBox(err error) {
     SetPalette(ErrorPalette)
     defer SetPalette(DefaultPalette)
 
+    HideCursor()
+    defer ShowCursor()
+
     rowmin, rowmax, colmin, colmax := modal.GetTextBounds()
 
     errString := fmt.Sprintf("%s", err)
@@ -397,7 +401,6 @@ func (modal *Modal) ShowErrorBox(err error) {
     x, y, w, h := colmin, rowmin, colmax-colmin-3, rowmax-rowmin-3
     label := NewSizedBorderedTextLabel(x, y, w, h, errString)
     label.Draw()
-    HideCursor()
     ReadInput()
 }
 
