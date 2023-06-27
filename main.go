@@ -73,13 +73,13 @@ func main() {
         switch (input) {
         case 'k': // up
             if (idx <= 0) {
-                idx = 0
+                idx = len(window.Notes)-1
             } else {
                 idx -= 1
             }
         case 'j': // down
             if (idx >= len(window.Notes)-1) {
-                idx = len(window.Notes)-1
+                idx = 0
             } else {
                 idx += 1
             }

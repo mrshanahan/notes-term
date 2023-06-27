@@ -446,14 +446,14 @@ func ModalEventLoop(main *MainWindow, modal *Modal) {
             modal.SelectField(idx)
         case 0x09: // TAB
             if (idx >= len(modal.Fields)-1) {
-                idx = len(modal.Fields)-1
+                idx = 0
             } else {
                 idx += 1
             }
             modal.SelectField(idx)
         case 0x5a5b1b: // SHIFT+TAB
             if (idx <= 0) {
-                idx = 0
+                idx = len(modal.Fields)-1
             } else {
                 idx -= 1
             }
