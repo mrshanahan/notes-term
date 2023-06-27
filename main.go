@@ -10,17 +10,6 @@ import (
     // unix "golang.org/x/sys/unix"
 )
 
-var (
-    DefaultPalette = &Palette{
-        DEFAULT_BACKGROUND_COLOR,
-        DEFAULT_FOREGROUND_COLOR,
-    }
-    HighlightPalette = &Palette{
-        HIGHLIGHT_BACKGROUND_COLOR,
-        HIGHLIGHT_FOREGROUND_COLOR,
-    }
-)
-
 func OpenEditor(path string) {
     cmd := exec.Command("nvim", path)
     cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
@@ -79,9 +68,7 @@ func main() {
     // var modal *Modal = nil
     for input != 'q' {
         // TODO: interrupts
-        inputBuf := make([]byte, 4)
-        os.Stdin.Read(inputBuf)
-        input = LEBytesToUInt32(inputBuf)
+        input = ReadInput()
         idx := window.Selection
         switch (input) {
         case 'k': // up

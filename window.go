@@ -1,6 +1,7 @@
 package main
 
 import (
+    // "errors"
     "fmt"
     "os"
     "strings"
@@ -25,6 +26,23 @@ const (
     DEFAULT_FOREGROUND_COLOR = 37 // white
     HIGHLIGHT_BACKGROUND_COLOR = 47 // white
     HIGHLIGHT_FOREGROUND_COLOR = 36 // cyan
+    ERROR_BACKGROUND_COLOR = 41 // red
+    ERROR_FOREGROUND_COLOR = 37 // white
+)
+
+var (
+    DefaultPalette = &Palette{
+        DEFAULT_BACKGROUND_COLOR,
+        DEFAULT_FOREGROUND_COLOR,
+    }
+    HighlightPalette = &Palette{
+        HIGHLIGHT_BACKGROUND_COLOR,
+        HIGHLIGHT_FOREGROUND_COLOR,
+    }
+    ErrorPalette = &Palette{
+        ERROR_BACKGROUND_COLOR,
+        ERROR_FOREGROUND_COLOR,
+    }
 )
 
 type Palette struct {
@@ -88,6 +106,14 @@ func NewTextLabel(x, y int, value string) *TextLabel {
     return &TextLabel{Window{x, y, len(value), 1, false}, value}
 }
 
+func NewBorderedTextLabel(x, y int, value string) *TextLabel {
+    return &TextLabel{Window{x, y, len(value)+2, 3, true}, value}
+}
+
+func NewSizedBorderedTextLabel(x, y, w, h int, value string) *TextLabel {
+    return &TextLabel{Window{x, y, w, h, true}, value}
+}
+
 type TextInput struct {
     Window
     Value string
@@ -105,13 +131,20 @@ func SetPalette(p *Palette) {
 func (w Window) GetTextBounds() (int, int, int, int) {
     posmod, sizemod := 0, 0
     if w.HasBorders {
-        posmod, sizemod = 2, 1
+        posmod, sizemod = 2, -1
     }
 
     return w.Y + posmod,
-           w.Y + w.Height - sizemod,
+           w.Y + w.Height + sizemod,
            w.X + posmod,
-           w.X + w.Width - sizemod
+           w.X + w.Width + sizemod
+}
+
+func ReadInput() uint32 {
+    inputBuf := make([]byte, 4)
+    os.Stdin.Read(inputBuf)
+    input := LEBytesToUInt32(inputBuf)
+    return input
 }
 
 func Move(row, col int) {
@@ -186,7 +219,7 @@ func DrawCornerBox(window *MainWindow) {
     DrawString(boxrowmin+1, boxcolmin+2, window.LastKey)
 }
 
-func DrawInterior(window *MainWindow) {
+func (window *Window) DrawInterior() {
     rowmin, rowmax, colmin, colmax := window.GetTextBounds()
     for r := rowmin; r <= rowmax; r++ {
         for c := colmin; c <= colmax; c++ {
@@ -203,8 +236,10 @@ func DrawNoteRow(window *MainWindow, noteIdx int, palette *Palette) {
 
     row, col := noteIdx + rowmin, colmin
     Move(row, col)
-    fmt.Printf("\033[%dm", palette.Background)
-    fmt.Printf("\033[%dm", palette.Foreground)
+    SetPalette(palette)
+    defer SetPalette(DefaultPalette)
+    // fmt.Printf("\033[%dm", palette.Background)
+    // fmt.Printf("\033[%dm", palette.Foreground)
 
     note := window.Notes[noteIdx]
     contents := note.Title
@@ -216,13 +251,13 @@ func DrawNoteRow(window *MainWindow, noteIdx int, palette *Palette) {
     padstring := strings.Repeat(" ", padding)
     fmt.Printf("%s%s", contents, padstring)
 
-    fmt.Printf("\033[%dm", DefaultPalette.Background)
-    fmt.Printf("\033[%dm", DefaultPalette.Foreground)
+    // fmt.Printf("\033[%dm", DefaultPalette.Background)
+    // fmt.Printf("\033[%dm", DefaultPalette.Foreground) }
 }
 
 func (window *MainWindow) Draw() {
     window.DrawBorders()
-    DrawInterior(window)
+    window.DrawInterior()
     DrawCornerBox(window)
 
     for i, _ := range window.Notes {
@@ -295,7 +330,10 @@ func Just[T any](x T) *Maybe[T] {
 }
 
 func (label *TextLabel) Draw() {
-    DrawString(label.Y, label.X, label.Value)
+    label.DrawBorders()
+    label.DrawInterior()
+    ymin, _, xmin, _ := label.GetTextBounds()
+    DrawString(ymin, xmin, label.Value)
 }
 
 func (inp *TextInput) Draw() {
@@ -308,6 +346,7 @@ func (inp *TextInput) Draw() {
 
 func (modal *Modal) Draw() {
     modal.DrawBorders()
+    modal.DrawInterior()
     modal.Title.Draw()
     for _, mf := range modal.Fields {
         mf.Label.Draw()
@@ -346,10 +385,28 @@ func (window *MainWindow) RequestInput(title string, fields []string) { // *Moda
     window.Draw()
 }
 
-func ShowErrorModal(err error) {
+func (modal *Modal) ShowErrorBox(err error) {
+    // TODO: Line splitting/some control over display
+    SetPalette(ErrorPalette)
+    defer SetPalette(DefaultPalette)
+
+    rowmin, rowmax, colmin, colmax := modal.GetTextBounds()
+
+    errString := fmt.Sprintf("%s", err)
+
+    x, y, w, h := colmin, rowmin, colmax-colmin-3, rowmax-rowmin-3
+    label := NewSizedBorderedTextLabel(x, y, w, h, errString)
+    label.Draw()
+    HideCursor()
+    ReadInput()
 }
 
 func (m *Modal) Validate() error {
+    for _, mf := range m.Fields {
+        if len(mf.Input.Value) == 0 {
+            return fmt.Errorf("Non-empty value required for field %s!", mf.Label.Value)
+        }
+    }
     return nil
 }
 
@@ -366,13 +423,13 @@ func ModalEventLoop(main *MainWindow, modal *Modal) {
     modal.SelectField(idx)
     var input uint32 = 0
     for {
-        inputBuf := make([]byte, 4)
-        os.Stdin.Read(inputBuf)
-        input = LEBytesToUInt32(inputBuf)
         // TODO: Others to handle:
         // - CTRL+Backspace
         // - Delete
         // - Terminal movement (CTRL+W, etc.)
+        // - Scrolling
+        // - Non-ASCII characters (Unicode alphanumeric/spaces?)
+        input = ReadInput()
         switch (input) {
         case 0x03, 0x1b: // CTRL+C/ESC
             return
@@ -384,7 +441,9 @@ func ModalEventLoop(main *MainWindow, modal *Modal) {
             if err == nil {
                 return
             }
-            ShowErrorModal(err)
+            modal.ShowErrorBox(err)
+            modal.Draw()
+            modal.SelectField(idx)
         case 0x09: // TAB
             if (idx >= len(modal.Fields)-1) {
                 idx = len(modal.Fields)-1
@@ -401,9 +460,11 @@ func ModalEventLoop(main *MainWindow, modal *Modal) {
             modal.SelectField(idx)
         case 0x7f: // Backspace
             fieldInput := modal.Fields[idx].Input
-            fieldInput.Value = fieldInput.Value[:len(fieldInput.Value)-1]
-            fieldInput.Draw()
-            modal.SelectField(idx)
+            if len(fieldInput.Value) > 0 {
+                fieldInput.Value = fieldInput.Value[:len(fieldInput.Value)-1]
+                fieldInput.Draw()
+                modal.SelectField(idx)
+            }
         default:
             if IsAscii(input) {
                 fieldInput := modal.Fields[idx].Input
