@@ -8,6 +8,7 @@ import (
     "path/filepath"
     "regexp"
     "strings"
+    "time"
     "unicode"
 )
 var (
@@ -28,17 +29,34 @@ func GetNotesRoot() string {
     return root
 }
 
-func LoadIndex() []*IndexEntry {
+func NewNote(title string) *IndexEntry {
     root := GetNotesRoot()
-    if err := os.MkdirAll(root, 0700); err != nil {
-        panic(err)
+    name := NewNoteName()
+    path := filepath.Join(root, name)
+    f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0700)
+    for err != nil && errors.Is(err, os.ErrExist) {
+        name = NewNoteName()
+        path = filepath.Join(root, name)
+        f, err = os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0700)
     }
-    path := filepath.Join(root, "index.txt")
-
-    f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0700)
     if err != nil {
         panic(err)
     }
+    defer f.Close()
+
+    return &IndexEntry{
+        Title: title,
+        Path: path,
+    }
+}
+
+func NewNoteName() string {
+    x := time.Now().UnixMilli()
+    return fmt.Sprintf("note%015d.txt", x)
+}
+
+func LoadIndex() []*IndexEntry {
+    f := openIndex()
     defer f.Close()
 
     entries := []*IndexEntry{}
@@ -54,6 +72,37 @@ func LoadIndex() []*IndexEntry {
         panic(err)
     }
     return entries
+}
+
+func SaveIndex(entries []*IndexEntry) {
+    f := openIndex()
+    defer f.Close()
+
+    for _, e := range entries {
+        f.WriteString(fmt.Sprintf("title: %s\n", e.Title))
+        f.WriteString(fmt.Sprintf("path: %s\n", e.Path))
+        f.WriteString("\n")
+    }
+}
+
+func openIndex() *os.File {
+    root := GetNotesRoot()
+    if err := os.MkdirAll(root, 0700); err != nil {
+        panic(err)
+    }
+    path := filepath.Join(root, "index.txt")
+
+    f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0700)
+    if err != nil {
+        panic(err)
+    }
+    return f
+}
+
+func fileExists(path string) bool {
+    f, err := os.OpenFile(path, os.O_RDONLY, 0000)
+    defer f.Close()
+    return errors.Is(err, os.ErrExist)
 }
 
 // NB: Includes "".

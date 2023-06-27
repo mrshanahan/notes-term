@@ -84,7 +84,10 @@ func main() {
                 idx += 1
             }
         case '\u000e': // CTRL+n
-            window.RequestInput("Create note", []string{"Title", "Test"})
+            values := window.RequestInput("Create note", []string{"Title"})
+            newEntry := NewNote(values["Title"])
+            window.Notes = append(window.Notes, newEntry)
+            SaveIndex(window.Notes)
         case '\u000d': // Enter
             OpenEditor(window.Notes[idx].Path)
         }

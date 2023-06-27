@@ -45,6 +45,8 @@ var (
     }
 )
 
+// TODO: Window as interface
+
 type Palette struct {
     Background int
     Foreground int
@@ -366,7 +368,7 @@ func (modal *Modal) SelectField(idx int) {
     }
 }
 
-func (window *MainWindow) RequestInput(title string, fields []string) {
+func (window *MainWindow) RequestInput(title string, fields []string) map[string]string {
     rowmin, rowmax, colmin, colmax := window.GetTextBounds()
 
     minvaluew := 80
@@ -377,13 +379,14 @@ func (window *MainWindow) RequestInput(title string, fields []string) {
 
     modal := NewModal(modalx, modaly, modalw, modalh, title, fields)
     modal.Draw()
+    defer window.Draw()
 
     ShowCursor()
     defer HideCursor()
 
     ModalEventLoop(window, modal)
 
-    window.Draw()
+    return modal.GetFieldValues()
 }
 
 func (modal *Modal) ShowErrorBox(err error) {
@@ -402,6 +405,14 @@ func (modal *Modal) ShowErrorBox(err error) {
     label := NewSizedBorderedTextLabel(x, y, w, h, errString)
     label.Draw()
     ReadInput()
+}
+
+func (m *Modal) GetFieldValues() map[string]string {
+    vals := map[string]string{}
+    for _, f := range m.Fields {
+        vals[f.Label.Value] = f.Input.Value
+    }
+    return vals
 }
 
 func (m *Modal) Validate() error {
