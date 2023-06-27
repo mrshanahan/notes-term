@@ -20,7 +20,7 @@ func OpenEditor(path string) {
 }
 
 func initState() (*MainWindow, func()) {
-    notes := LoadIndex("/home/matt/.notes/index.txt")
+    notes := LoadIndex()
     if len(notes) == 0 {
         fmt.Println("no notes")
         os.Exit(1)

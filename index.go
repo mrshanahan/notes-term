@@ -5,6 +5,7 @@ import (
     "errors"
     "fmt"
     "os"
+    "path/filepath"
     "regexp"
     "strings"
     "unicode"
@@ -19,8 +20,22 @@ type IndexEntry struct {
     Path string
 }
 
-func LoadIndex(path string) []*IndexEntry {
-    f, err := os.Open(path)
+func GetNotesRoot() string {
+    root := os.Getenv("NOTES_ROOT")
+    if root == "" {
+        root = filepath.Join(os.Getenv("HOME"), ".notes")
+    }
+    return root
+}
+
+func LoadIndex() []*IndexEntry {
+    root := GetNotesRoot()
+    if err := os.MkdirAll(root, 0700); err != nil {
+        panic(err)
+    }
+    path := filepath.Join(root, "index.txt")
+
+    f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0700)
     if err != nil {
         panic(err)
     }
