@@ -65,7 +65,8 @@ func main() {
     defer cleanup()
 
     var input uint32 = 0
-    for input != 'q' {
+    exiting := false
+    for !exiting {
         // TODO: interrupts
         input = ReadInput()
         idx := window.Selection
@@ -91,6 +92,8 @@ func main() {
             }
         case '\u000d': // Enter
             OpenEditor(window.Notes[idx].Path)
+        case 'q':
+            exiting = window.RequestConfirmation("Are you sure?")
         }
         window.LastKey = fmt.Sprintf("0x%x", input)
         window.Selection = idx
