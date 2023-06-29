@@ -65,7 +65,6 @@ func main() {
     defer cleanup()
 
     var input uint32 = 0
-    // var modal *Modal = nil
     for input != 'q' {
         // TODO: interrupts
         input = ReadInput()

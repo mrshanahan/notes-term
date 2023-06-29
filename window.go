@@ -71,10 +71,19 @@ type Modal struct {
     Window
     Title *TextLabel
     Fields []*ModalField
+    OK *Button
+    Cancel *Button
 }
 
-func NewModal(x, y, w, h int, title string, fields []string) *Modal {
-    titlex, titley := x+2, y+2
+func NewModal(window *Window, title string, fields []string) *Modal {
+    rowmin, rowmax, colmin, colmax := window.GetTextBounds()
+    minvaluew := 80
+    maxdescw := len(MaxBy(fields, func(f string) int { return len(f) }).Value)
+    modalw, modalh := Max(minvaluew, maxdescw).Value, len(fields) * 6 + 3
+    modalx := (colmax - colmin - modalw) / 2
+    modaly := (rowmax - rowmin - modalh) / 2
+
+    titlex, titley := modalx+2, modaly+2
     titleLabel := NewTextLabel(titlex, titley, title)
 
     fieldy, fieldx := titley+2, titlex+1
@@ -86,10 +95,18 @@ func NewModal(x, y, w, h int, title string, fields []string) *Modal {
         }
         fieldy += 6
     }
+
+    buttony, buttonw, buttonh := fieldy, 30, 1
+    okx := titlex
+    cancelx := modalx + modalw - buttonw - 2
+    okButton := NewButton(okx, buttony, buttonw, buttonh, "OK")
+    cancelButton := NewButton(cancelx, buttony, buttonw, buttonh, "Cancel")
     modal := &Modal{
-        Window{x, y, w, h, true},
+        Window{modalx, modaly, modalw, modalh, true},
         titleLabel,
         modalFields,
+        okButton,
+        cancelButton,
     }
     return modal
 }
@@ -123,6 +140,16 @@ type TextInput struct {
 
 func NewTextInput(x, y, w int) *TextInput {
     return &TextInput{Window{x, y, w, 3, true}, ""}
+}
+
+type Button struct {
+    Window
+    Text string
+    Pressed bool
+}
+
+func NewButton(x, y, w, h int, text string) *Button {
+    return &Button{Window{x, y, w, h, true}, text, false}
 }
 
 func SetPalette(p *Palette) {
@@ -369,15 +396,7 @@ func (modal *Modal) SelectField(idx int) {
 }
 
 func (window *MainWindow) RequestInput(title string, fields []string) map[string]string {
-    rowmin, rowmax, colmin, colmax := window.GetTextBounds()
-
-    minvaluew := 80
-    maxdescw := len(MaxBy(fields, func(f string) int { return len(f) }).Value)
-    modalw, modalh := Max(minvaluew, maxdescw).Value, len(fields) * 6 + 3
-    modalx := (colmax - colmin - modalw) / 2
-    modaly := (rowmax - rowmin - modalh) / 2
-
-    modal := NewModal(modalx, modaly, modalw, modalh, title, fields)
+    modal := NewModal(&window.Window, title, fields)
     modal.Draw()
     defer window.Draw()
 
