@@ -1,4 +1,6 @@
 TODO:
+- Highlight-able buttons
+- Low-left corner box with command list
 - Only redraw modified parts of screen
 - Experiment with "overridden" methods
 - Redraw on zoom in/out (i.e. on terminal size change)
