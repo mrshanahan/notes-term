@@ -384,9 +384,13 @@ func (window *MainWindow) RequestInput(title string, fields []string) map[string
     ShowCursor()
     defer HideCursor()
 
-    ModalEventLoop(window, modal)
+    success := ModalEventLoop(window, modal)
 
-    return modal.GetFieldValues()
+    if success {
+        return modal.GetFieldValues()
+    } else {
+        return nil
+    }
 }
 
 func (modal *Modal) ShowErrorBox(err error) {
@@ -432,7 +436,7 @@ func IsAscii(inp uint32) bool {
     return inp <= 127
 }
 
-func ModalEventLoop(main *MainWindow, modal *Modal) {
+func ModalEventLoop(main *MainWindow, modal *Modal) bool {
     idx := 0
     modal.SelectField(idx)
     var input uint32 = 0
@@ -446,14 +450,14 @@ func ModalEventLoop(main *MainWindow, modal *Modal) {
         input = ReadInput()
         switch (input) {
         case 0x03, 0x1b: // CTRL+C/ESC
-            return
+            return false
         case 0x0d: // ENTER
             err := modal.Validate()
             if err == nil {
                 err = modal.Save()
             }
             if err == nil {
-                return
+                return true
             }
             modal.ShowErrorBox(err)
             modal.Draw()
