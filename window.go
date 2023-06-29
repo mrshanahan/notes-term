@@ -79,7 +79,7 @@ func NewModal(window *Window, title string, fields []string) *Modal {
     rowmin, rowmax, colmin, colmax := window.GetTextBounds()
     minvaluew := 80
     maxdescw := len(MaxBy(fields, func(f string) int { return len(f) }).Value)
-    modalw, modalh := Max(minvaluew, maxdescw).Value, len(fields) * 6 + 3
+    modalw, modalh := Max(minvaluew, maxdescw).Value, (len(fields) + 1) * 6 + 3
     modalx := (colmax - colmin - modalw) / 2
     modaly := (rowmax - rowmin - modalh) / 2
 
@@ -96,9 +96,10 @@ func NewModal(window *Window, title string, fields []string) *Modal {
         fieldy += 6
     }
 
-    buttony, buttonw, buttonh := fieldy, 30, 1
-    okx := titlex
-    cancelx := modalx + modalw - buttonw - 2
+    buttonbuf := 5
+    buttony, buttonw, buttonh := fieldy, 20, 3
+    okx := modalx + buttonbuf
+    cancelx := modalx + modalw - buttonw - buttonbuf
     okButton := NewButton(okx, buttony, buttonw, buttonh, "OK")
     cancelButton := NewButton(cancelx, buttony, buttonw, buttonh, "Cancel")
     modal := &Modal{
@@ -146,10 +147,11 @@ type Button struct {
     Window
     Text string
     Pressed bool
+    IsSelected bool
 }
 
 func NewButton(x, y, w, h int, text string) *Button {
-    return &Button{Window{x, y, w, h, true}, text, false}
+    return &Button{Window{x, y, w, h, true}, text, false, false}
 }
 
 func SetPalette(p *Palette) {
@@ -373,6 +375,32 @@ func (inp *TextInput) Draw() {
     DrawString(y, xmin+strlen, strings.Repeat(" ", xmax-xmin-strlen))
 }
 
+func (b *Button) Draw() {
+    if b.IsSelected {
+        SetPalette(HighlightPalette)
+        defer SetPalette(DefaultPalette)
+    }
+
+    y, _, xmin, xmax := b.GetTextBounds()
+    textw := xmax - xmin + 1
+    b.DrawBorders()
+    strlen := len(b.Text)
+    buflen := textw - strlen
+    var bufleft, bufright int
+    if buflen < 0 {
+        bufleft, bufright = 0, 0
+    } else if buflen % 2 == 0 {
+        bufleft, bufright = buflen / 2, buflen / 2
+    } else {
+        bufleft, bufright = buflen / 2, buflen / 2 + 1
+    }
+    buftext := fmt.Sprintf("%s%s%s",
+        strings.Repeat(" ", bufleft),
+        b.Text,
+        strings.Repeat(" ", bufright))
+    DrawString(y, xmin, buftext)
+}
+
 func (modal *Modal) Draw() {
     modal.DrawBorders()
     modal.DrawInterior()
@@ -381,11 +409,13 @@ func (modal *Modal) Draw() {
         mf.Label.Draw()
         mf.Input.Draw()
     }
+    modal.OK.Draw()
+    modal.Cancel.Draw()
 }
 
 func (modal *Modal) SelectField(idx int) {
     fields := modal.Fields
-    if idx <= len(fields)-1 {
+    if idx >= 0 && idx <= len(fields)-1 {
         f := fields[idx]
         y, _, x, _ := f.Input.GetTextBounds()
         valLen := len(f.Input.Value)
@@ -393,6 +423,9 @@ func (modal *Modal) SelectField(idx int) {
     } else {
         panic("ahhh")
     }
+}
+
+func (modal *Modal) SelectOKButton() {
 }
 
 func (window *MainWindow) RequestInput(title string, fields []string) map[string]string {
@@ -471,30 +504,59 @@ func ModalEventLoop(main *MainWindow, modal *Modal) bool {
         case 0x03, 0x1b: // CTRL+C/ESC
             return false
         case 0x0d: // ENTER
-            err := modal.Validate()
-            if err == nil {
-                err = modal.Save()
+            if modal.OK.IsSelected || (idx >= 0 && idx <= len(modal.Fields)-1) {
+                err := modal.Validate()
+                if err == nil {
+                    err = modal.Save()
+                }
+                if err == nil {
+                    return true
+                }
+                modal.ShowErrorBox(err)
+                modal.Draw()
+
+                if idx >= 0 && idx <= len(modal.Fields)-1 {
+                    modal.SelectField(idx)
+                }
+            } else if modal.Cancel.IsSelected {
+                return false
             }
-            if err == nil {
-                return true
-            }
-            modal.ShowErrorBox(err)
-            modal.Draw()
-            modal.SelectField(idx)
         case 0x09: // TAB
-            if (idx >= len(modal.Fields)-1) {
-                idx = 0
+            if modal.OK.IsSelected {
+                modal.Cancel.IsSelected, modal.OK.IsSelected = true, false
+                HideCursor()
+                modal.Draw()
+            } else if modal.Cancel.IsSelected {
+                idx, modal.Cancel.IsSelected = 0, false
+                modal.Draw()
+                modal.SelectField(idx)
+                ShowCursor()
+            } else if (idx >= len(modal.Fields)-1) {
+                modal.OK.IsSelected, idx = true, -1
+                HideCursor()
+                modal.Draw()
             } else {
                 idx += 1
+                modal.SelectField(idx)
             }
-            modal.SelectField(idx)
         case 0x5a5b1b: // SHIFT+TAB
-            if (idx <= 0) {
-                idx = len(modal.Fields)-1
+            if modal.Cancel.IsSelected {
+                modal.OK.IsSelected, modal.Cancel.IsSelected = true, false
+                HideCursor()
+                modal.Draw()
+            } else if modal.OK.IsSelected {
+                idx, modal.OK.IsSelected = len(modal.Fields)-1, false
+                modal.Draw()
+                modal.SelectField(idx)
+                ShowCursor()
+            } else if idx <= 0 {
+                modal.Cancel.IsSelected, idx = true, -1
+                HideCursor()
+                modal.Draw()
             } else {
                 idx -= 1
+                modal.SelectField(idx)
             }
-            modal.SelectField(idx)
         case 0x7f: // Backspace
             fieldInput := modal.Fields[idx].Input
             if len(fieldInput.Value) > 0 {
@@ -503,7 +565,7 @@ func ModalEventLoop(main *MainWindow, modal *Modal) bool {
                 modal.SelectField(idx)
             }
         default:
-            if IsAscii(input) {
+            if IsAscii(input) && idx >= 0 && idx <= len(modal.Fields)-1 {
                 fieldInput := modal.Fields[idx].Input
                 fieldInput.Value = fmt.Sprintf("%s%c", fieldInput.Value, input)
                 fieldInput.Draw()
