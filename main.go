@@ -20,9 +20,9 @@ func OpenEditor(path string) {
 }
 
 func initState() (*MainWindow, func()) {
-    notes := LoadIndex()
-    if len(notes) == 0 {
-        fmt.Println("no notes")
+    notes, err := LoadIndex()
+    if err != nil {
+        fmt.Printf("error: failed to open notes index: %s\n", err)
         os.Exit(1)
     }
 
@@ -83,7 +83,7 @@ func main() {
             } else {
                 idx += 1
             }
-        case '\u000e': // CTRL+n
+        case '\u000e': // CTRL+N
             values := window.RequestInput("Create note", []string{"Title"})
             if values != nil {
                 newEntry := NewNote(values["Title"])
@@ -92,8 +92,27 @@ func main() {
             }
         case '\u000d': // Enter
             OpenEditor(window.Notes[idx].Path)
-        case 'q':
-            exiting = window.RequestConfirmation("Are you sure?")
+        case '\u0004': // CTRL+D
+            showtitle := window.Notes[idx].Title
+            if len(showtitle) > 20 {
+                showtitle = showtitle[:20]
+            }
+            confirmmsg := fmt.Sprintf("Delete note '%s'?", showtitle)
+            yes := window.RequestConfirmation(confirmmsg)
+            if yes {
+                err := DeleteNote(window.Notes[idx])
+                if err != nil {
+                    window.ShowErrorBox(err)
+                } else {
+                    window.Notes = append(window.Notes[:idx], window.Notes[idx+1:]...)
+                    err = SaveIndex(window.Notes)
+                    if err != nil {
+                        window.ShowErrorBox(err)
+                    }
+                }
+            }
+        case 'q', '\u0003': // CTRL+C
+            exiting = window.RequestConfirmation("Are you sure you want to leave?")
         }
         window.LastKey = fmt.Sprintf("0x%x", input)
         window.Selection = idx

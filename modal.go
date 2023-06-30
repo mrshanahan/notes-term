@@ -51,7 +51,9 @@ func NewModal(window *Window, title string, fields []string) *Modal {
     } else {
         maxdescw = len(title)
     }
-    modalw, modalh := Max(minvaluew, maxdescw).Value, (len(fields) + 1) * 6 + 3
+
+    fieldh := 6
+    modalw, modalh := Max(minvaluew, maxdescw).Value, (len(fields) + 1) * fieldh + 3
     modalx := (colmax - colmin - modalw) / 2
     modaly := (rowmax - rowmin - modalh) / 2
 
@@ -65,7 +67,7 @@ func NewModal(window *Window, title string, fields []string) *Modal {
             NewTextLabel(fieldx, fieldy, f),
             NewTextInput(fieldx, fieldy+1, 70),
         }
-        fieldy += 6
+        fieldy += fieldh
     }
 
     buttonbuf := 5
@@ -110,7 +112,7 @@ func (modal *Modal) SelectField(idx int) {
     }
 }
 
-func (modal *Modal) ShowErrorBox(err error) {
+func (window *Window) ShowErrorBox(err error) {
     // TODO: Line splitting/some control over display
     SetPalette(ErrorPalette)
     defer SetPalette(DefaultPalette)
@@ -118,7 +120,7 @@ func (modal *Modal) ShowErrorBox(err error) {
     HideCursor()
     defer ShowCursor()
 
-    rowmin, rowmax, colmin, colmax := modal.GetTextBounds()
+    rowmin, rowmax, colmin, colmax := window.GetTextBounds()
 
     errString := fmt.Sprintf("%s", err)
 

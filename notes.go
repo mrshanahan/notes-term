@@ -55,8 +55,11 @@ func NewNoteName() string {
     return fmt.Sprintf("note%015d.txt", x)
 }
 
-func LoadIndex() []*IndexEntry {
-    f := openIndex()
+func LoadIndex() ([]*IndexEntry, error) {
+    f, err := openIndex()
+    if err != nil {
+        return nil, err
+    }
     defer f.Close()
 
     entries := []*IndexEntry{}
@@ -69,34 +72,52 @@ func LoadIndex() []*IndexEntry {
         entry, linesProcessed, err = parseNextIndexEntry(scanner)
     }
     if err != nil {
-        panic(err)
+        return nil, err
     }
-    return entries
+    return entries, nil
 }
 
-func SaveIndex(entries []*IndexEntry) {
-    f := openIndex()
+func SaveIndex(entries []*IndexEntry) error {
+    f, err := openIndex()
+    if err != nil {
+        return err
+    }
     defer f.Close()
 
+    err = f.Truncate(0)
+    if err != nil {
+        return err
+    }
     for _, e := range entries {
         f.WriteString(fmt.Sprintf("title: %s\n", e.Title))
         f.WriteString(fmt.Sprintf("path: %s\n", e.Path))
         f.WriteString("\n")
     }
+    return nil
 }
 
-func openIndex() *os.File {
+func DeleteNote(entry *IndexEntry) error {
+    err := os.Remove(entry.Path)
+    if err != nil && !errors.Is(err, os.ErrNotExist) {
+        return err
+    }
+    return nil
+}
+
+// Private
+
+func openIndex() (*os.File, error) {
     root := GetNotesRoot()
     if err := os.MkdirAll(root, 0700); err != nil {
-        panic(err)
+        return nil, err
     }
     path := filepath.Join(root, "index.txt")
 
     f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0700)
     if err != nil {
-        panic(err)
+        return nil, err
     }
-    return f
+    return f, nil
 }
 
 func fileExists(path string) bool {
