@@ -315,9 +315,6 @@ func (window *MainWindow) RequestConfirmation(prompt string) bool {
 
     modal.UpdateFromSelection()
 
-    ShowCursor()
-    defer HideCursor()
-
     success := ModalEventLoop(window, modal)
     return success
 }

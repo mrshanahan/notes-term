@@ -92,6 +92,7 @@ func main() {
             }
         case '\u000d': // Enter
             OpenEditor(window.Notes[idx].Path)
+            HideCursor()
         case '\u0004': // CTRL+D
             showtitle := window.Notes[idx].Title
             if len(showtitle) > 20 {
