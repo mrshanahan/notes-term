@@ -240,7 +240,9 @@ func DrawNoteRow(window *MainWindow, noteIdx int, palette *Palette) {
 func (window *MainWindow) Draw() {
     window.DrawBorders()
     window.DrawInterior()
-    DrawCornerBox(window)
+    if DEBUG {
+        DrawCornerBox(window)
+    }
 
     for i, _ := range window.Notes {
         if i == window.Selection {

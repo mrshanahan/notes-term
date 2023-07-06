@@ -1,6 +1,7 @@
 package main
 
 import (
+    "flag"
     "fmt"
     "os"
     "os/exec"
@@ -8,6 +9,10 @@ import (
     term "golang.org/x/term"
     // termios "github.com/pkg/term/termios"
     // unix "golang.org/x/sys/unix"
+)
+
+var (
+    DEBUG = false
 )
 
 func OpenEditor(path string) {
@@ -61,6 +66,11 @@ func initState() (*MainWindow, func()) {
 }
 
 func main() {
+    var debugFlag *bool = flag.Bool("debug", false, "Enable debugging features")
+    flag.Parse()
+
+    DEBUG = *debugFlag
+
     window, cleanup := initState()
     defer cleanup()
 
