@@ -1,5 +1,8 @@
 TODO:
 - Low-left corner box with command list
+- Open "notes" to something with a specific title
+    o Should just open neovim to the right file for now,
+      but exit should go to main notes screen
 - Only redraw modified parts of screen
 - Experiment with "overridden" methods
 - Redraw on zoom in/out (i.e. on terminal size change)
