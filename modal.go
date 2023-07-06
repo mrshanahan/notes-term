@@ -42,12 +42,12 @@ func NewModalInputSelection(numFields int) *ModalInputSelection {
     }
 }
 
-func NewModal(window *Window, title string, fields []string) *Modal {
+func NewModal(window *Window, title string, fields map[string]string) *Modal {
     rowmin, rowmax, colmin, colmax := window.GetTextBounds()
     minvaluew := 80
     var maxdescw int
     if len(fields) > 0 {
-        maxdescw = len(MaxBy(fields, func(f string) int { return len(f) }).Value)
+        maxdescw = len(MaxBy(Keys[string, string](fields), func(f string) int { return len(f) }).Value)
     } else {
         maxdescw = len(title)
     }
@@ -62,12 +62,14 @@ func NewModal(window *Window, title string, fields []string) *Modal {
 
     fieldy, fieldx := titley+2, titlex+1
     modalFields := make([]*ModalField, len(fields))
-    for i, f := range fields {
+    i := 0
+    for k, v := range fields {
         modalFields[i] = &ModalField{
-            NewTextLabel(fieldx, fieldy, f),
-            NewTextInput(fieldx, fieldy+1, 70),
+            NewTextLabel(fieldx, fieldy, k),
+            NewTextInput(fieldx, fieldy+1, 70, v),
         }
         fieldy += fieldh
+        i += 1
     }
 
     buttonbuf := 5
@@ -290,6 +292,14 @@ func ModalEventLoop(main *MainWindow, modal *Modal) bool {
 }
 
 func (window *MainWindow) RequestInput(title string, fields []string) map[string]string {
+    fieldsWithDefaults := map[string]string{}
+    for _, f := range fields {
+        fieldsWithDefaults[f] = ""
+    }
+    return window.RequestInputWithDefaults(title, fieldsWithDefaults)
+}
+
+func (window *MainWindow) RequestInputWithDefaults(title string, fields map[string]string) map[string]string {
     modal := NewModal(&window.Window, title, fields)
     modal.Draw()
     defer window.Draw()
@@ -309,7 +319,7 @@ func (window *MainWindow) RequestInput(title string, fields []string) map[string
 }
 
 func (window *MainWindow) RequestConfirmation(prompt string) bool {
-    modal := NewModal(&window.Window, prompt, []string{})
+    modal := NewModal(&window.Window, prompt, map[string]string{})
     modal.Draw()
     defer window.Draw()
 

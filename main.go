@@ -90,6 +90,12 @@ func main() {
                 window.Notes = append(window.Notes, newEntry)
                 SaveIndex(window.Notes)
             }
+        case '\u0012': // CTRL+R
+            values := window.RequestInputWithDefaults("Rename note", map[string]string{"Title": window.Notes[idx].Title})
+            if values != nil {
+                window.Notes[idx].Title = values["Title"]
+                SaveIndex(window.Notes)
+            }
         case '\u000d': // Enter
             OpenEditor(window.Notes[idx].Path)
             HideCursor()

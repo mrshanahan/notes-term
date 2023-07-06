@@ -90,8 +90,8 @@ type TextInput struct {
     Value string
 }
 
-func NewTextInput(x, y, w int) *TextInput {
-    return &TextInput{Window{x, y, w, 3, true}, ""}
+func NewTextInput(x, y, w int, value string) *TextInput {
+    return &TextInput{Window{x, y, w, 3, true}, value}
 }
 
 type Button struct {

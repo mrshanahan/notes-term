@@ -4,6 +4,14 @@ import (
     "fmt"
 )
 
+func Keys[K comparable, V any](xs map[K]V) []K {
+    ks := make([]K, len(xs))
+    for k := range xs {
+        ks = append(ks, k)
+    }
+    return ks
+}
+
 func MaxBy(xs []string, f func(string)int) *Maybe[string] {
     max := 0
     var maxTmp *Maybe[string] = nil
