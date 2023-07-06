@@ -64,9 +64,22 @@ type MainWindow struct {
     Window
     Selection int
     Notes []*IndexEntry
-    LastKey string
+    LastKeyWindow *TextLabel
 }
 
+func NewMainWindow(termw, termh int, notes []*IndexEntry) *MainWindow {
+    // TODO: This is nasty. Make this all constructable at once & w/o repeating
+    //       the logic of GetTextBounds() in multiple places.
+    window := &MainWindow{Window{0, 0, termw, termh, true}, 0, notes, nil}
+    _, rowmax, _, colmax := window.GetTextBounds()
+
+    boxw, boxh := 22, 3
+    boxx, boxy := colmax-boxw+1, rowmax-boxh+1
+    lastKey := NewSizedBorderedTextLabel(boxx, boxy, boxw, boxh, "")
+    window.LastKeyWindow = lastKey
+
+    return window
+}
 
 type TextLabel struct {
     Window
@@ -181,26 +194,6 @@ func (window Window) DrawBorders() {
     DrawChar(bordrowmax, bordcolmax, BOX_DOUBLE_LOWER_RIGHT)
 }
 
-func DrawCornerBox(window *MainWindow) {
-    _, rowmax, _, colmax := window.GetTextBounds()
-    boxwidth, boxheight := 20, 1
-    boxcolmin, boxcolmax := colmax-boxwidth, colmax+1
-    boxrowmin, boxrowmax := rowmax-boxheight, rowmax+1
-    for c := boxcolmin; c <= boxcolmax; c++ {
-        DrawChar(boxrowmin, c, BOX_DOUBLE_HORIZONTAL)
-        DrawChar(boxrowmax, c, BOX_DOUBLE_HORIZONTAL)
-    }
-    for r := boxrowmin; r <= boxrowmax; r++ {
-        DrawChar(r, boxcolmin, BOX_DOUBLE_VERTICAL)
-        DrawChar(r, boxcolmax, BOX_DOUBLE_VERTICAL)
-    }
-    DrawChar(boxrowmin, boxcolmin, BOX_DOUBLE_UPPER_LEFT)
-    DrawChar(boxrowmin, boxcolmax, BOX_DOUBLE_VERTICAL_LEFT)
-    DrawChar(boxrowmax, boxcolmin, BOX_DOUBLE_HORIZONTAL_UP)
-    DrawChar(boxrowmax, boxcolmax, BOX_DOUBLE_LOWER_RIGHT)
-    DrawString(boxrowmin+1, boxcolmin+2, window.LastKey)
-}
-
 func (window *Window) DrawInterior() {
     rowmin, rowmax, colmin, colmax := window.GetTextBounds()
     for r := rowmin; r <= rowmax; r++ {
@@ -241,7 +234,7 @@ func (window *MainWindow) Draw() {
     window.DrawBorders()
     window.DrawInterior()
     if DEBUG {
-        DrawCornerBox(window)
+        window.LastKeyWindow.Draw()
     }
 
     for i, _ := range window.Notes {

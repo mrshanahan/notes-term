@@ -54,7 +54,7 @@ func initState() (*MainWindow, func()) {
     SetPalette(DefaultPalette)
     // defer ResetBackgroundColor()
 
-    window := &MainWindow{Window{0, 0, termw, termh, true}, 0, notes, ""}
+    window := NewMainWindow(termw, termh, notes)
     window.Draw()
 
     return window, func() {
@@ -131,7 +131,7 @@ func main() {
         case 'q', '\u0003': // CTRL+C
             exiting = window.RequestConfirmation("Are you sure you want to leave?")
         }
-        window.LastKey = fmt.Sprintf("0x%x", input)
+        window.LastKeyWindow.Value = fmt.Sprintf(" 0x%x", input)
         window.Selection = idx
         window.Draw()
     }
