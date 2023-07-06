@@ -58,6 +58,7 @@ type Window struct {
     Width int
     Height int
     HasBorders bool
+    CustomBordering []int
 }
 
 type MainWindow struct {
@@ -70,12 +71,18 @@ type MainWindow struct {
 func NewMainWindow(termw, termh int, notes []*IndexEntry) *MainWindow {
     // TODO: This is nasty. Make this all constructable at once & w/o repeating
     //       the logic of GetTextBounds() in multiple places.
-    window := &MainWindow{Window{0, 0, termw, termh, true}, 0, notes, nil}
+    window := &MainWindow{Window{0, 0, termw, termh, true, []int{}}, 0, notes, nil}
     _, rowmax, _, colmax := window.GetTextBounds()
 
     boxw, boxh := 22, 3
     boxx, boxy := colmax-boxw+1, rowmax-boxh+1
-    lastKey := NewSizedBorderedTextLabel(boxx, boxy, boxw, boxh, "")
+    bordering := []int{
+        BOX_DOUBLE_UPPER_LEFT,
+        BOX_DOUBLE_VERTICAL_LEFT,
+        BOX_DOUBLE_HORIZONTAL_UP,
+        BOX_DOUBLE_LOWER_RIGHT,
+    }
+    lastKey := NewSizedBorderedTextLabel(boxx, boxy, boxw, boxh, "", bordering)
     window.LastKeyWindow = lastKey
 
     return window
@@ -87,15 +94,15 @@ type TextLabel struct {
 }
 
 func NewTextLabel(x, y int, value string) *TextLabel {
-    return &TextLabel{Window{x, y, len(value), 1, false}, value}
+    return &TextLabel{Window{x, y, len(value), 1, false, []int{}}, value}
 }
 
 func NewBorderedTextLabel(x, y int, value string) *TextLabel {
-    return &TextLabel{Window{x, y, len(value)+2, 3, true}, value}
+    return &TextLabel{Window{x, y, len(value)+2, 3, true, []int{}}, value}
 }
 
-func NewSizedBorderedTextLabel(x, y, w, h int, value string) *TextLabel {
-    return &TextLabel{Window{x, y, w, h, true}, value}
+func NewSizedBorderedTextLabel(x, y, w, h int, value string, bordering []int) *TextLabel {
+    return &TextLabel{Window{x, y, w, h, true, bordering}, value}
 }
 
 type TextInput struct {
@@ -104,7 +111,7 @@ type TextInput struct {
 }
 
 func NewTextInput(x, y, w int, value string) *TextInput {
-    return &TextInput{Window{x, y, w, 3, true}, value}
+    return &TextInput{Window{x, y, w, 3, true, []int{}}, value}
 }
 
 type Button struct {
@@ -115,7 +122,7 @@ type Button struct {
 }
 
 func NewButton(x, y, w, h int, text string) *Button {
-    return &Button{Window{x, y, w, h, true}, text, false, false}
+    return &Button{Window{x, y, w, h, true, []int{}}, text, false, false}
 }
 
 func SetPalette(p *Palette) {
@@ -177,6 +184,13 @@ func (window Window) DrawBorders() {
         return
     }
 
+    var cornul, cornur, cornll, cornlr int
+    if len(window.CustomBordering) == 4 {
+        cornul, cornur, cornll, cornlr = window.CustomBordering[0], window.CustomBordering[1], window.CustomBordering[2], window.CustomBordering[3]
+    } else {
+        cornul, cornur, cornll, cornlr = BOX_DOUBLE_UPPER_LEFT, BOX_DOUBLE_UPPER_RIGHT, BOX_DOUBLE_LOWER_LEFT, BOX_DOUBLE_LOWER_RIGHT
+    }
+
     rowmin, rowmax, colmin, colmax := window.GetTextBounds()
     bordrowmin, bordrowmax := rowmin-1, rowmax+1
     bordcolmin, bordcolmax := colmin-1, colmax+1
@@ -188,10 +202,10 @@ func (window Window) DrawBorders() {
         DrawChar(r, bordcolmin, BOX_DOUBLE_VERTICAL)
         DrawChar(r, bordcolmax, BOX_DOUBLE_VERTICAL)
     }
-    DrawChar(bordrowmin, bordcolmin, BOX_DOUBLE_UPPER_LEFT)
-    DrawChar(bordrowmin, bordcolmax, BOX_DOUBLE_UPPER_RIGHT)
-    DrawChar(bordrowmax, bordcolmin, BOX_DOUBLE_LOWER_LEFT)
-    DrawChar(bordrowmax, bordcolmax, BOX_DOUBLE_LOWER_RIGHT)
+    DrawChar(bordrowmin, bordcolmin, cornul)
+    DrawChar(bordrowmin, bordcolmax, cornur)
+    DrawChar(bordrowmax, bordcolmin, cornll)
+    DrawChar(bordrowmax, bordcolmax, cornlr)
 }
 
 func (window *Window) DrawInterior() {

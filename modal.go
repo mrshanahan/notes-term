@@ -80,7 +80,7 @@ func NewModal(window *Window, title string, fields map[string]string) *Modal {
     cancelButton := NewButton(cancelx, buttony, buttonw, buttonh, "Cancel")
     selection := NewModalInputSelection(len(modalFields))
     modal := &Modal{
-        Window{modalx, modaly, modalw, modalh, true},
+        Window{modalx, modaly, modalw, modalh, true, []int{}},
         titleLabel,
         modalFields,
         okButton,
@@ -127,7 +127,7 @@ func (window *Window) ShowErrorBox(err error) {
     errString := fmt.Sprintf("%s", err)
 
     x, y, w, h := colmin, rowmin, colmax-colmin-3, rowmax-rowmin-3
-    label := NewSizedBorderedTextLabel(x, y, w, h, errString)
+    label := NewSizedBorderedTextLabel(x, y, w, h, errString, []int{})
     label.Draw()
     ReadInput()
 }
