@@ -128,6 +128,8 @@ func main() {
                     }
                 }
             }
+        case '\u0008': // CTRL+H
+            window.HelpCollapsed = !window.HelpCollapsed
         case 'q', '\u0003': // q/CTRL+C
             exiting = window.RequestConfirmation("Are you sure you want to leave?")
         }

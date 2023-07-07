@@ -67,12 +67,14 @@ type MainWindow struct {
     Notes []*IndexEntry
     LastKeyWindow *TextLabel
     HelpWindow *MultilineTextLabel
+    HelpCollapsedLabel *TextLabel
+    HelpCollapsed bool
 }
 
 func NewMainWindow(termw, termh int, notes []*IndexEntry) *MainWindow {
     // TODO: This is nasty. Make this all constructable at once & w/o repeating
     //       the logic of GetTextBounds() in multiple places.
-    window := &MainWindow{Window{0, 0, termw, termh, true, []int{}}, 0, notes, nil, nil}
+    window := &MainWindow{Window{0, 0, termw, termh, true, []int{}}, 0, notes, nil, nil, nil, true}
     _, rowmax, colmin, colmax := window.GetTextBounds()
 
     lastkeyw, lastkeyh := 22, 3
@@ -105,6 +107,12 @@ func NewMainWindow(termw, termh int, notes []*IndexEntry) *MainWindow {
     }
     helpWindow := NewSizedBorderedMultilineTextLabel(helpx, helpy, helpw, helph, helpText, helpBordering)
     window.HelpWindow = helpWindow
+
+    collapseText := "CTRL+H to open help"
+    collapsew, collapseh := len(collapseText)+2, 3
+    collapsex, collapsey := colmin-2, rowmax-collapseh+1
+    collapseLabel := NewSizedBorderedTextLabel(collapsex, collapsey, collapsew, collapseh, collapseText, helpBordering)
+    window.HelpCollapsedLabel = collapseLabel
 
     return window
 }
@@ -280,7 +288,11 @@ func (window *MainWindow) Draw() {
     if DEBUG {
         window.LastKeyWindow.Draw()
     }
-    window.HelpWindow.Draw()
+    if window.HelpCollapsed {
+        window.HelpCollapsedLabel.Draw()
+    } else {
+        window.HelpWindow.Draw()
+    }
 
     for i, _ := range window.Notes {
         if i == window.Selection {

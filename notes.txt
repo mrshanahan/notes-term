@@ -1,6 +1,4 @@
 TODO:
-- Low-left corner box with command list
-    o E.g. something that pops up with CTRL+H
 - Scrolling with multiple items
 - SEARCH!
 - Open "notes" to something with a specific title
