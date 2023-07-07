@@ -128,7 +128,7 @@ func main() {
                     }
                 }
             }
-        case 'q', '\u0003': // CTRL+C
+        case 'q', '\u0003': // q/CTRL+C
             exiting = window.RequestConfirmation("Are you sure you want to leave?")
         }
         window.LastKeyWindow.Value = fmt.Sprintf(" 0x%x", input)

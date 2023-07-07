@@ -3,7 +3,6 @@ TODO:
     o E.g. something that pops up with CTRL+H
 - Scrolling with multiple items
 - SEARCH!
-- Only show inputs in "debug" mode
 - Open "notes" to something with a specific title
     o Should just open neovim to the right file for now,
       but exit should go to main notes screen

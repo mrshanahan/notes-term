@@ -66,24 +66,45 @@ type MainWindow struct {
     Selection int
     Notes []*IndexEntry
     LastKeyWindow *TextLabel
+    HelpWindow *MultilineTextLabel
 }
 
 func NewMainWindow(termw, termh int, notes []*IndexEntry) *MainWindow {
     // TODO: This is nasty. Make this all constructable at once & w/o repeating
     //       the logic of GetTextBounds() in multiple places.
-    window := &MainWindow{Window{0, 0, termw, termh, true, []int{}}, 0, notes, nil}
-    _, rowmax, _, colmax := window.GetTextBounds()
+    window := &MainWindow{Window{0, 0, termw, termh, true, []int{}}, 0, notes, nil, nil}
+    _, rowmax, colmin, colmax := window.GetTextBounds()
 
-    boxw, boxh := 22, 3
-    boxx, boxy := colmax-boxw+1, rowmax-boxh+1
-    bordering := []int{
+    lastkeyw, lastkeyh := 22, 3
+    lastkeyx, lastkeyy := colmax-lastkeyw+1, rowmax-lastkeyh+1
+    lastkeyBordering := []int{
         BOX_DOUBLE_UPPER_LEFT,
         BOX_DOUBLE_VERTICAL_LEFT,
         BOX_DOUBLE_HORIZONTAL_UP,
         BOX_DOUBLE_LOWER_RIGHT,
     }
-    lastKey := NewSizedBorderedTextLabel(boxx, boxy, boxw, boxh, "", bordering)
+    lastKey := NewSizedBorderedTextLabel(lastkeyx, lastkeyy, lastkeyw, lastkeyh, "", lastkeyBordering)
     window.LastKeyWindow = lastKey
+
+    helpText := []string{
+        "j/k       Up/down",
+        "CTRL+N    Create note",
+        "CTRL+R    Rename note",
+        "CTRL+D    Delete note",
+        "Enter     Edit note",
+        "q/CTRL+C  Exit",
+    }
+    helpw := len(MaxBy(helpText, func (x string) int { return len(x) }).Value) + 2
+    helph := len(helpText) + 2
+    helpx, helpy := colmin-2, rowmax-helph+1
+    helpBordering := []int{
+        BOX_DOUBLE_VERTICAL_RIGHT,
+        BOX_DOUBLE_UPPER_RIGHT,
+        BOX_DOUBLE_LOWER_LEFT,
+        BOX_DOUBLE_HORIZONTAL_UP,
+    }
+    helpWindow := NewSizedBorderedMultilineTextLabel(helpx, helpy, helpw, helph, helpText, helpBordering)
+    window.HelpWindow = helpWindow
 
     return window
 }
@@ -103,6 +124,15 @@ func NewBorderedTextLabel(x, y int, value string) *TextLabel {
 
 func NewSizedBorderedTextLabel(x, y, w, h int, value string, bordering []int) *TextLabel {
     return &TextLabel{Window{x, y, w, h, true, bordering}, value}
+}
+
+type MultilineTextLabel struct {
+    Window
+    Value []string
+}
+
+func NewSizedBorderedMultilineTextLabel(x, y, w, h int, value []string, bordering []int) *MultilineTextLabel {
+    return &MultilineTextLabel{Window{x, y, w, h, true, bordering}, value}
 }
 
 type TextInput struct {
@@ -250,6 +280,7 @@ func (window *MainWindow) Draw() {
     if DEBUG {
         window.LastKeyWindow.Draw()
     }
+    window.HelpWindow.Draw()
 
     for i, _ := range window.Notes {
         if i == window.Selection {
@@ -279,6 +310,17 @@ func (label *TextLabel) Draw() {
     label.DrawInterior()
     ymin, _, xmin, _ := label.GetTextBounds()
     DrawString(ymin, xmin, label.Value)
+}
+
+func (label *MultilineTextLabel) Draw() {
+    label.DrawBorders()
+    label.DrawInterior()
+    ymin, _, xmin, _ := label.GetTextBounds()
+    y := ymin
+    for _, l := range label.Value {
+        DrawString(y, xmin, l)
+        y += 1
+    }
 }
 
 func (inp *TextInput) Draw() {
