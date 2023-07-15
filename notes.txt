@@ -1,11 +1,11 @@
 TODO:
-- Scrolling with multiple items
-- SEARCH!
 - Open "notes" to something with a specific title
     o Should just open neovim to the right file for now,
       but exit should go to main notes screen
 - Handle neovim bad exit more gracefully, e.g. if file is
   already open
+- SEARCH!
+- Scrolling with multiple items
 - Stop panicking
 - Only redraw modified parts of screen
 - Experiment with "overridden" methods
