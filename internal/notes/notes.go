@@ -4,6 +4,7 @@ import (
     "bufio"
     "errors"
     "fmt"
+    "io"
     "os"
     "path/filepath"
     "regexp"
@@ -32,11 +33,11 @@ func GetNotesRoot() string {
 
 func NewNote(title string) *IndexEntry {
     root := GetNotesRoot()
-    name := NewNoteName()
+    name := newNoteName()
     path := filepath.Join(root, name)
     f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0700)
     for err != nil && errors.Is(err, os.ErrExist) {
-        name = NewNoteName()
+        name = newNoteName()
         path = filepath.Join(root, name)
         f, err = os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0700)
     }
@@ -51,7 +52,60 @@ func NewNote(title string) *IndexEntry {
     }
 }
 
-func NewNoteName() string {
+func ImportNote(srcPath string) (*IndexEntry, error) {
+    // TODO: Clean up dst file if import fails
+    root := GetNotesRoot()
+    name := newNoteName()
+    dstPath := filepath.Join(root, name)
+    dstf, err := os.OpenFile(dstPath, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0700)
+    for err != nil && errors.Is(err, os.ErrExist) {
+        name = newNoteName()
+        dstPath = filepath.Join(root, name)
+        dstf, err = os.OpenFile(dstPath, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0700)
+    }
+    if err != nil {
+        return nil, err
+    }
+    defer dstf.Close()
+
+    srcf, err := os.OpenFile(srcPath, os.O_RDONLY, 0400)
+    if err != nil {
+        return nil, err
+    }
+    defer srcf.Close()
+
+    err = copyFile(srcf, dstf)
+    if err != nil {
+        return nil, err
+    }
+
+    _, title := filepath.Split(srcPath)
+    return &IndexEntry{
+        Title: title,
+        Path: dstPath,
+    }, nil
+}
+
+func copyFile(srcf, dstf *os.File) error {
+    bufsize := 1024
+    buf := make([]byte, bufsize)
+    read, err := srcf.Read(buf)
+    for read > 0 && err == nil {
+        writebuf := buf[:read]
+        _, err := dstf.Write(writebuf)
+        if err != nil {
+            return err
+        }
+        read, err = srcf.Read(buf)
+    }
+
+    if err != nil && !errors.Is(err, io.EOF) {
+        return err
+    }
+    return nil
+}
+
+func newNoteName() string {
     x := time.Now().UnixMilli()
     return fmt.Sprintf("note%015d.txt", x)
 }

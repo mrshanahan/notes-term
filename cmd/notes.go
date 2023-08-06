@@ -127,6 +127,24 @@ func main() {
                     }
                 }
             }
+        case '\u0009': // CTRL+I
+            values := window.RequestInput("Enter path to existing note", []string{"Path"})
+            if values != nil {
+                path := values["Path"]
+                newEntry, err := notes.ImportNote(path)
+                if err != nil {
+                    window.ShowErrorBox(err)
+                } else {
+                    values = window.RequestInputWithDefaults("New name", map[string]string{"Title": newEntry.Title})
+                    if values != nil {
+                        newEntry.Title = values["Title"]
+                        window.Notes = append(window.Notes, newEntry)
+                        notes.SaveIndex(window.Notes)
+                    } else {
+                        notes.DeleteNote(newEntry)
+                    }
+                }
+            }
         case '\u0008': // CTRL+H
             window.HelpCollapsed = !window.HelpCollapsed
         case 'q', '\u0003': // q/CTRL+C

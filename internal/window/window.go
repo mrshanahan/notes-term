@@ -97,6 +97,7 @@ func NewMainWindow(termw, termh int, notes []*notes.IndexEntry) *MainWindow {
         "CTRL+N    Create note",
         "CTRL+R    Rename note",
         "CTRL+D    Delete note",
+        "CTRL+I    Import note",
         "Enter     Edit note",
         "q/CTRL+C  Exit",
     }
