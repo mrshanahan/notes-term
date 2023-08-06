@@ -9,10 +9,9 @@ import (
     term "golang.org/x/term"
     // termios "github.com/pkg/term/termios"
     // unix "golang.org/x/sys/unix"
-)
 
-var (
-    DEBUG = false
+    w "mrshanahan.com/notes-term/internal/window"
+    "mrshanahan.com/notes-term/internal/notes"
 )
 
 func OpenEditor(path string) {
@@ -24,15 +23,15 @@ func OpenEditor(path string) {
     }
 }
 
-func initState() (*MainWindow, func()) {
-    notes, err := LoadIndex()
+func initState() (*w.MainWindow, func()) {
+    notes, err := notes.LoadIndex()
     if err != nil {
         fmt.Printf("error: failed to open notes index: %s\n", err)
         os.Exit(1)
     }
 
     fd := os.Stdin.Fd()
-    DisableEcho(fd)
+    w.DisableEcho(fd)
     // t.Lflag = t.Lflag | unix.ECHO
     // defer termios.Tcsetattr(fd, termios.TCSANOW, t)
 
@@ -42,24 +41,24 @@ func initState() (*MainWindow, func()) {
     }
     // defer term.Restore(int(fd), oldState)
 
-    ClearScreen()
+    w.ClearScreen()
     termw, termh, err := term.GetSize(int(fd))
     if err != nil {
         panic(err)
     }
 
-    HideCursor()
+    w.HideCursor()
     // defer ShowCursor()
 
-    SetPalette(DefaultPalette)
+    w.SetPalette(w.DefaultPalette)
     // defer ResetBackgroundColor()
 
-    window := NewMainWindow(termw, termh, notes)
+    window := w.NewMainWindow(termw, termh, notes)
     window.Draw()
 
     return window, func() {
         term.Restore(int(fd), oldState)
-        ShowCursor()
+        w.ShowCursor()
         // This might not be needed - everything seems to work w/o it
         // ResetBackgroundColor()
     }
@@ -69,7 +68,7 @@ func main() {
     var debugFlag *bool = flag.Bool("debug", false, "Enable debugging features")
     flag.Parse()
 
-    DEBUG = *debugFlag
+    w.Debug = *debugFlag
 
     window, cleanup := initState()
     defer cleanup()
@@ -78,7 +77,7 @@ func main() {
     exiting := false
     for !exiting {
         // TODO: interrupts
-        input = ReadInput()
+        input = w.ReadInput()
         idx := window.Selection
         switch (input) {
         case 'k': // up
@@ -96,19 +95,19 @@ func main() {
         case '\u000e': // CTRL+N
             values := window.RequestInput("Create note", []string{"Title"})
             if values != nil {
-                newEntry := NewNote(values["Title"])
+                newEntry := notes.NewNote(values["Title"])
                 window.Notes = append(window.Notes, newEntry)
-                SaveIndex(window.Notes)
+                notes.SaveIndex(window.Notes)
             }
         case '\u0012': // CTRL+R
             values := window.RequestInputWithDefaults("Rename note", map[string]string{"Title": window.Notes[idx].Title})
             if values != nil {
                 window.Notes[idx].Title = values["Title"]
-                SaveIndex(window.Notes)
+                notes.SaveIndex(window.Notes)
             }
         case '\u000d': // Enter
             OpenEditor(window.Notes[idx].Path)
-            HideCursor()
+            w.HideCursor()
         case '\u0004': // CTRL+D
             showtitle := window.Notes[idx].Title
             if len(showtitle) > 20 {
@@ -117,12 +116,12 @@ func main() {
             confirmmsg := fmt.Sprintf("Delete note '%s'?", showtitle)
             yes := window.RequestConfirmation(confirmmsg)
             if yes {
-                err := DeleteNote(window.Notes[idx])
+                err := notes.DeleteNote(window.Notes[idx])
                 if err != nil {
                     window.ShowErrorBox(err)
                 } else {
                     window.Notes = append(window.Notes[:idx], window.Notes[idx+1:]...)
-                    err = SaveIndex(window.Notes)
+                    err = notes.SaveIndex(window.Notes)
                     if err != nil {
                         window.ShowErrorBox(err)
                     }
@@ -138,6 +137,6 @@ func main() {
         window.Draw()
     }
 
-    Move(0,0)
-    ClearScreen()
+    w.Move(0,0)
+    w.ClearScreen()
 }

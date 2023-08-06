@@ -1,7 +1,9 @@
-package main
+package window
 
 import (
     "fmt"
+
+    "mrshanahan.com/notes-term/internal/util"
 )
 
 type Modal struct {
@@ -47,13 +49,13 @@ func NewModal(window *Window, title string, fields map[string]string) *Modal {
     minvaluew := 80
     var maxdescw int
     if len(fields) > 0 {
-        maxdescw = len(MaxBy(Keys[string, string](fields), func(f string) int { return len(f) }).Value)
+        maxdescw = len(util.MaxBy(util.Keys[string, string](fields), func(f string) int { return len(f) }).Value)
     } else {
         maxdescw = len(title)
     }
 
     fieldh := 6
-    modalw, modalh := Max(minvaluew, maxdescw).Value, (len(fields) + 1) * fieldh + 3
+    modalw, modalh := util.Max(minvaluew, maxdescw).Value, (len(fields) + 1) * fieldh + 3
     modalx := (colmax - colmin - modalw) / 2
     modaly := (rowmax - rowmin - modalh) / 2
 

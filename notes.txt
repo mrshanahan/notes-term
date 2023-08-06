@@ -11,3 +11,11 @@ TODO:
 - Experiment with "overridden" methods
 - Redraw on zoom in/out (i.e. on terminal size change)
 - Import text
+- Open new file by default
+
+SEARCH:
+- Components needed to index:
+    o Tokenizer
+        + This seems like a very basic one, and uses the below separators: https://github.com/euskadi31/go-tokenizer
+            sep: convertSeparator("\t\n\r ,.:?\"!;()"),
+    o Word stemmer

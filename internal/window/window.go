@@ -1,4 +1,4 @@
-package main
+package window
 
 import (
     // "errors"
@@ -8,6 +8,9 @@ import (
     // term "golang.org/x/term"
     termios "github.com/pkg/term/termios"
     unix "golang.org/x/sys/unix"
+
+    "mrshanahan.com/notes-term/internal/notes"
+    "mrshanahan.com/notes-term/internal/util"
 )
 
 const (
@@ -43,6 +46,7 @@ var (
         ERROR_BACKGROUND_COLOR,
         ERROR_FOREGROUND_COLOR,
     }
+    Debug = false
 )
 
 // TODO: Window as interface
@@ -64,14 +68,14 @@ type Window struct {
 type MainWindow struct {
     Window
     Selection int
-    Notes []*IndexEntry
+    Notes []*notes.IndexEntry
     LastKeyWindow *TextLabel
     HelpWindow *MultilineTextLabel
     HelpCollapsedLabel *TextLabel
     HelpCollapsed bool
 }
 
-func NewMainWindow(termw, termh int, notes []*IndexEntry) *MainWindow {
+func NewMainWindow(termw, termh int, notes []*notes.IndexEntry) *MainWindow {
     // TODO: This is nasty. Make this all constructable at once & w/o repeating
     //       the logic of GetTextBounds() in multiple places.
     window := &MainWindow{Window{0, 0, termw, termh, true, []int{}}, 0, notes, nil, nil, nil, true}
@@ -96,7 +100,7 @@ func NewMainWindow(termw, termh int, notes []*IndexEntry) *MainWindow {
         "Enter     Edit note",
         "q/CTRL+C  Exit",
     }
-    helpw := len(MaxBy(helpText, func (x string) int { return len(x) }).Value) + 2
+    helpw := len(util.MaxBy(helpText, func (x string) int { return len(x) }).Value) + 2
     helph := len(helpText) + 2
     helpx, helpy := colmin-2, rowmax-helph+1
     helpBordering := []int{
@@ -183,7 +187,7 @@ func (w Window) GetTextBounds() (int, int, int, int) {
 func ReadInput() uint32 {
     inputBuf := make([]byte, 4)
     os.Stdin.Read(inputBuf)
-    input := LEBytesToUInt32(inputBuf)
+    input := util.LEBytesToUInt32(inputBuf)
     return input
 }
 
@@ -285,7 +289,7 @@ func DrawNoteRow(window *MainWindow, noteIdx int, palette *Palette) {
 func (window *MainWindow) Draw() {
     window.DrawBorders()
     window.DrawInterior()
-    if DEBUG {
+    if Debug {
         window.LastKeyWindow.Draw()
     }
     if window.HelpCollapsed {

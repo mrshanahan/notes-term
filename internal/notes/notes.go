@@ -1,4 +1,4 @@
-package main
+package notes
 
 import (
     "bufio"
@@ -11,6 +11,7 @@ import (
     "time"
     "unicode"
 )
+
 var (
     INDEX_TITLE_PATTERN = regexp.MustCompile(`^title:\s*(.*)`)
     INDEX_PATH_PATTERN = regexp.MustCompile(`^path:\s*(.*)`)
