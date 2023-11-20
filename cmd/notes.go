@@ -181,9 +181,11 @@ func main() {
 
                     newContent, err := os.ReadFile(path)
                     if err == nil {
-                        err := client.UpdateNoteContent(note.ID, newContent)
-                        if err != nil {
-                            window.ShowErrorBox(err)
+                        if newContent != nil && len(newContent) > 0 {
+                            err := client.UpdateNoteContent(note.ID, newContent)
+                            if err != nil {
+                                window.ShowErrorBox(err)
+                            }
                         }
                     }
                     _ = os.Remove(path)
