@@ -1,17 +1,34 @@
 package main
 
 import (
+    "bytes"
     "flag"
     "fmt"
+    "io"
     "os"
     "os/exec"
+    "path/filepath"
+    "time"
     // "strings"
+
     term "golang.org/x/term"
     // termios "github.com/pkg/term/termios"
     // unix "golang.org/x/sys/unix"
 
     w "mrshanahan.com/notes-term/internal/window"
-    "mrshanahan.com/notes-term/internal/notes"
+    // "mrshanahan.com/notes-term/internal/notes"
+
+
+    nc "github.com/mrshanahan/notes-api/pkg/client"
+    // "github.com/mrshanahan/notes-api/pkg/notes"
+)
+
+var (
+    client *nc.Client
+)
+
+const (
+    TEMP_FILE_ROOT = "/tmp/notes/"
 )
 
 func OpenEditor(path string) {
@@ -23,12 +40,36 @@ func OpenEditor(path string) {
     }
 }
 
-func initState() (*w.MainWindow, func()) {
-    notes, err := notes.LoadIndex()
+func createTempFile(content []byte) (string, error) {
+    err := os.MkdirAll(TEMP_FILE_ROOT, 0770)
     if err != nil {
-        fmt.Printf("error: failed to open notes index: %s\n", err)
-        os.Exit(1)
+        return "", err
     }
+
+    f, err := os.CreateTemp(TEMP_FILE_ROOT, "note*")
+    if err != nil {
+        return "", err
+    }
+    defer f.Close()
+    path := f.Name()
+
+    r := bytes.NewReader(content)
+    _, err = io.Copy(f, r)
+    if err != nil {
+        _ = os.Remove(path)
+        return "", err
+    }
+
+    return path, nil
+}
+
+func newTempFileName() string {
+    x := time.Now().UnixMilli()
+    return fmt.Sprintf("note%015d.txt", x)
+}
+
+func initState() (*w.MainWindow, func()) {
+    client = nc.NewClient("http://localhost:3333/")
 
     fd := os.Stdin.Fd()
     w.DisableEcho(fd)
@@ -52,6 +93,11 @@ func initState() (*w.MainWindow, func()) {
 
     w.SetPalette(w.DefaultPalette)
     // defer ResetBackgroundColor()
+
+    notes, err := client.ListNotes()
+    if err != nil {
+        panic(err)
+    }
 
     window := w.NewMainWindow(termw, termh, notes)
     window.Draw()
@@ -95,18 +141,54 @@ func main() {
         case '\u000e': // CTRL+N
             values := window.RequestInput("Create note", []string{"Title"})
             if values != nil {
-                newEntry := notes.NewNote(values["Title"])
-                window.Notes = append(window.Notes, newEntry)
-                notes.SaveIndex(window.Notes)
+                // TODO: Make all of these asynchronous
+                newNote, err := client.CreateNote(values["Title"])
+                if err != nil {
+                    window.ShowErrorBox(err)
+                } else {
+                    window.Notes = append(window.Notes, newNote)
+                }
             }
         case '\u0012': // CTRL+R
             values := window.RequestInputWithDefaults("Rename note", map[string]string{"Title": window.Notes[idx].Title})
             if values != nil {
-                window.Notes[idx].Title = values["Title"]
-                notes.SaveIndex(window.Notes)
+                note := window.Notes[idx]
+                // TODO: Make all of these asynchronous
+                err := client.UpdateNote(note.ID, values["Title"])
+                if err != nil {
+                    window.ShowErrorBox(err)
+                } else {
+                    updatedNote, err := client.GetNote(note.ID)
+                    if err != nil {
+                        window.ShowErrorBox(err)
+                        window.Notes[idx].Title = values["Title"]
+                    } else {
+                        window.Notes[idx] = updatedNote
+                    }
+                }
             }
         case '\u000d': // Enter
-            OpenEditor(window.Notes[idx].Path)
+            note := window.Notes[idx]
+            content, err := client.GetNoteContent(note.ID)
+            if err != nil {
+                window.ShowErrorBox(err)
+            } else {
+                path, err := createTempFile(content)
+                if err != nil {
+                    window.ShowErrorBox(fmt.Errorf("error when creating temp file: %w", err))
+                } else {
+                    OpenEditor(path)
+
+                    newContent, err := os.ReadFile(path)
+                    if err == nil {
+                        err := client.UpdateNoteContent(note.ID, newContent)
+                        if err != nil {
+                            window.ShowErrorBox(err)
+                        }
+                    }
+                    _ = os.Remove(path)
+                }
+            }
             w.HideCursor()
         case '\u0004': // CTRL+D
             showtitle := window.Notes[idx].Title
@@ -116,32 +198,41 @@ func main() {
             confirmmsg := fmt.Sprintf("Delete note '%s'?", showtitle)
             yes := window.RequestConfirmation(confirmmsg)
             if yes {
-                err := notes.DeleteNote(window.Notes[idx])
+                err := client.DeleteNote(window.Notes[idx].ID)
                 if err != nil {
+                    // TODO: Title describing failed action
                     window.ShowErrorBox(err)
                 } else {
                     window.Notes = append(window.Notes[:idx], window.Notes[idx+1:]...)
-                    err = notes.SaveIndex(window.Notes)
-                    if err != nil {
-                        window.ShowErrorBox(err)
-                    }
                 }
             }
         case '\u0009': // CTRL+I
             values := window.RequestInput("Enter path to existing note", []string{"Path"})
             if values != nil {
                 path := values["Path"]
-                newEntry, err := notes.ImportNote(path)
-                if err != nil {
-                    window.ShowErrorBox(err)
-                } else {
-                    values = window.RequestInputWithDefaults("New name", map[string]string{"Title": newEntry.Title})
-                    if values != nil {
-                        newEntry.Title = values["Title"]
-                        window.Notes = append(window.Notes, newEntry)
-                        notes.SaveIndex(window.Notes)
+                _, defaultTitle := filepath.Split(path)
+                values = window.RequestInputWithDefaults("New name", map[string]string{"Title": defaultTitle})
+                // TODO: Move this to a separate func to avoid Matryoshka effect
+                if values != nil {
+                    content, err := os.ReadFile(path)
+                    if err != nil {
+                        window.ShowErrorBox(err)
                     } else {
-                        notes.DeleteNote(newEntry)
+                        note, err := client.CreateNote(values["Title"])
+                        if err != nil {
+                            window.ShowErrorBox(err)
+                        } else {
+                            err := client.UpdateNoteContent(note.ID, content)
+                            if err != nil {
+                                window.ShowErrorBox(fmt.Errorf("error while setting content; cleaning up: %w", err))
+                                err := client.DeleteNote(note.ID)
+                                if err != nil {
+                                    window.ShowErrorBox(fmt.Errorf("error while cleaning up; manually update content for note %d: %w", note.ID, err))
+                                }
+                            } else {
+                                window.Notes = append(window.Notes, note)
+                            }
+                        }
                     }
                 }
             }

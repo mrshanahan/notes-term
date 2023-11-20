@@ -9,7 +9,7 @@ import (
     termios "github.com/pkg/term/termios"
     unix "golang.org/x/sys/unix"
 
-    "mrshanahan.com/notes-term/internal/notes"
+    "github.com/mrshanahan/notes-api/pkg/notes"
     "mrshanahan.com/notes-term/internal/util"
 )
 
@@ -68,14 +68,14 @@ type Window struct {
 type MainWindow struct {
     Window
     Selection int
-    Notes []*notes.IndexEntry
+    Notes []*notes.Note
     LastKeyWindow *TextLabel
     HelpWindow *MultilineTextLabel
     HelpCollapsedLabel *TextLabel
     HelpCollapsed bool
 }
 
-func NewMainWindow(termw, termh int, notes []*notes.IndexEntry) *MainWindow {
+func NewMainWindow(termw, termh int, notes []*notes.Note) *MainWindow {
     // TODO: This is nasty. Make this all constructable at once & w/o repeating
     //       the logic of GetTextBounds() in multiple places.
     window := &MainWindow{Window{0, 0, termw, termh, true, []int{}}, 0, notes, nil, nil, nil, true}

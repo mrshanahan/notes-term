@@ -116,6 +116,7 @@ func (modal *Modal) SelectField(idx int) {
     }
 }
 
+// TODO: Optional title
 func (window *Window) ShowErrorBox(err error) {
     // TODO: Line splitting/some control over display
     SetPalette(ErrorPalette)
