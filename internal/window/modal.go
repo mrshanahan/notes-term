@@ -1,6 +1,7 @@
 package window
 
 import (
+    "errors"
     "fmt"
 
     "mrshanahan.com/notes-term/internal/util"
@@ -15,6 +16,13 @@ type Modal struct {
     Selection *ModalInputSelection
 }
 
+type OptionModal struct {
+    Window
+    Title *TextLabel
+    Options []*Button
+    Selection *ModalOptionSelection
+}
+
 type ModalField struct {
     Label *TextLabel
     Input *TextInput
@@ -27,6 +35,12 @@ type ModalInputSelection struct {
     CurrentField int
     OKSelected bool
     CancelSelected bool
+}
+
+// TODO: Merge these two selection types
+type ModalOptionSelection struct {
+    NumOptions int
+    CurrentOption int
 }
 
 func NewModalInputSelection(numFields int) *ModalInputSelection {
@@ -44,7 +58,149 @@ func NewModalInputSelection(numFields int) *ModalInputSelection {
     }
 }
 
-func NewModal(window *Window, title string, fields map[string]string) *Modal {
+func NewModalOptionSelection(numOptions int) *ModalOptionSelection {
+    return &ModalOptionSelection{
+        numOptions,
+        0,
+    }
+}
+
+// TODOs:
+// - Extract Modal into an interface
+// - Smarter tiling - max 3 per row but use squares if possible (e.g. 2x2)
+func NewOptionModal(window *Window, title string, options []string) *OptionModal {
+    // Find max width of buttons
+    rowmin, rowmax, colmin, colmax := window.GetTextBounds()
+
+    buttonxbuf, buttonybuf := 5, 2
+    buttonh := 3
+    var buttonw int
+    if len(options) > 0 {
+        buttonw = len(util.MaxBy(options, func(f string) int { return len(f) }).Value)
+    } else {
+        buttonw = len(title)
+    }
+
+    // Tile buttons in rows of 3
+    buttonsperrow := 3
+    numrows := (len(options)-1) / buttonsperrow
+    modalh := numrows * (buttonh + buttonybuf) + buttonybuf
+    modalw := util.Min(len(options), buttonsperrow).Value * (buttonw + buttonxbuf)
+
+    modalx := (colmax - colmin - modalw) / 2
+    modaly := (rowmax - rowmin - modalh) / 2
+
+    titlex, titley := modalx+2, modaly+2
+    titleLabel := NewTextLabel(titlex, titley, title)
+
+    firstbuttonx := modalx + buttonxbuf
+    firstbuttony := modaly + buttonybuf
+    buttons := make([]*Button, len(options))
+    for i, o := range options {
+        buttonx := firstbuttonx + ((buttonw + buttonxbuf) * (i % buttonsperrow))
+        buttony := firstbuttony + ((buttonh + buttonybuf) * (i / buttonsperrow))
+        buttons[i] = NewButton(buttonx, buttony, buttonw, buttonh, o)
+    }
+
+    selection := NewModalOptionSelection(len(options))
+    modal := &OptionModal{
+        Window{modalx, modaly, modalw, modalh, true, []int{}},
+        titleLabel,
+        buttons,
+        selection,
+    }
+    return modal
+}
+
+func (modal *OptionModal) Draw() {
+    modal.DrawBorders()
+    modal.DrawInterior()
+    modal.Title.Draw()
+    for _, mo := range modal.Options {
+        mo.Draw()
+    }
+}
+
+func (m *OptionModal) GetOptionValue() int {
+    return m.Selection.CurrentOption
+}
+
+func (m *OptionModal) Validate() error {
+    if m.Selection.CurrentOption >= m.Selection.NumOptions || m.Selection.CurrentOption < 0 {
+        return errors.New("invalid button selection! either you really fucked up or I did")
+    }
+    return nil
+}
+
+func (m *OptionModal) Save() error {
+    return nil
+}
+
+func (modal *OptionModal) UpdateFromSelection() {
+    selection := modal.Selection
+    for i, b := range modal.Options {
+        b.IsSelected = i == selection.CurrentOption
+    }
+    modal.Draw()
+}
+
+func (s *ModalOptionSelection) SelectNext() {
+    s.CurrentOption = (s.CurrentOption + 1) % s.NumOptions
+}
+
+func (s *ModalOptionSelection) SelectPrev() {
+    s.CurrentOption = (s.CurrentOption + s.NumOptions - 1) % s.NumOptions
+}
+
+func (modal *OptionModal) GetCurrentOption() *Button {
+    return modal.Options[modal.Selection.CurrentOption]
+}
+
+func (modal *OptionModal) ResetSelection() {
+    modal.Selection.CurrentOption = 0
+    modal.UpdateFromSelection()
+}
+
+func IsAscii(inp uint32) bool {
+    return inp <= 127
+}
+
+func OptionModalEventLoop(main *MainWindow, modal *OptionModal) bool {
+    var input uint32 = 0
+    for {
+        // TODO: Others to handle:
+        // - CTRL+Backspace
+        // - Delete
+        // - Terminal movement (CTRL+W, etc.)
+        // - Scrolling
+        // - Non-ASCII characters (Unicode alphanumeric/spaces?)
+        input = ReadInput()
+        switch (input) {
+        case 0x03, 0x1b: // CTRL+C/ESC
+            return false
+        case 0x0d: // ENTER
+                err := modal.Validate()
+                if err == nil {
+                    err = modal.Save()
+                }
+                if err == nil {
+                    return true
+                }
+                modal.ShowErrorBox(err)
+                modal.Draw()
+                // TODO: reset input to invalid field?
+                modal.ResetSelection()
+        case 0x09: // TAB
+            modal.Selection.SelectNext()
+            modal.UpdateFromSelection()
+        case 0x5a5b1b: // SHIFT+TAB
+            modal.Selection.SelectPrev()
+            modal.UpdateFromSelection()
+        }
+    }
+}
+
+func NewInputModal(window *Window, title string, okLabel string, cancelLabel string, fields map[string]string) *Modal {
     rowmin, rowmax, colmin, colmax := window.GetTextBounds()
     minvaluew := 80
     var maxdescw int
@@ -78,8 +234,8 @@ func NewModal(window *Window, title string, fields map[string]string) *Modal {
     buttony, buttonw, buttonh := fieldy, 20, 3
     okx := modalx + buttonbuf
     cancelx := modalx + modalw - buttonw - buttonbuf
-    okButton := NewButton(okx, buttony, buttonw, buttonh, "OK")
-    cancelButton := NewButton(cancelx, buttony, buttonw, buttonh, "Cancel")
+    okButton := NewButton(okx, buttony, buttonw, buttonh, okLabel)
+    cancelButton := NewButton(cancelx, buttony, buttonw, buttonh, cancelLabel)
     selection := NewModalInputSelection(len(modalFields))
     modal := &Modal{
         Window{modalx, modaly, modalw, modalh, true, []int{}},
@@ -135,6 +291,23 @@ func (window *Window) ShowErrorBox(err error) {
     ReadInput()
 }
 
+// TODO: Optional title
+func (window *Window) ShowInfoBox(msg string) {
+    // TODO: Line splitting/some control over display
+    // SetPalette(ErrorPalette)
+    // defer SetPalette(DefaultPalette)
+
+    HideCursor()
+    defer ShowCursor()
+
+    rowmin, rowmax, colmin, colmax := window.GetTextBounds()
+
+    x, y, w, h := colmin, rowmin, colmax-colmin-3, rowmax-rowmin-3
+    label := NewSizedBorderedTextLabel(x, y, w, h, msg, []int{})
+    label.Draw()
+    ReadInput()
+}
+
 func (m *Modal) GetFieldValues() map[string]string {
     vals := map[string]string{}
     for _, f := range m.Fields {
@@ -147,7 +320,7 @@ func (m *Modal) Validate() error {
     // TODO: Validate all fields each go
     for _, mf := range m.Fields {
         if len(mf.Input.Value) == 0 {
-            return fmt.Errorf("Non-empty value required for field %s!", mf.Label.Value)
+            return fmt.Errorf("non-empty value required for field %s", mf.Label.Value)
         }
     }
     return nil
@@ -237,10 +410,6 @@ func (modal *Modal) ResetSelection() {
     modal.UpdateFromSelection()
 }
 
-func IsAscii(inp uint32) bool {
-    return inp <= 127
-}
-
 func ModalEventLoop(main *MainWindow, modal *Modal) bool {
     var input uint32 = 0
     for {
@@ -303,7 +472,7 @@ func (window *MainWindow) RequestInput(title string, fields []string) map[string
 }
 
 func (window *MainWindow) RequestInputWithDefaults(title string, fields map[string]string) map[string]string {
-    modal := NewModal(&window.Window, title, fields)
+    modal := NewInputModal(&window.Window, title, "OK", "Cancel", fields)
     modal.Draw()
     defer window.Draw()
 
@@ -322,7 +491,11 @@ func (window *MainWindow) RequestInputWithDefaults(title string, fields map[stri
 }
 
 func (window *MainWindow) RequestConfirmation(prompt string) bool {
-    modal := NewModal(&window.Window, prompt, map[string]string{})
+    return window.RequestConfirmationWithButtons(prompt, "OK", "Cancel")
+}
+
+func (window *MainWindow) RequestConfirmationWithButtons(prompt string, ok string, cancel string) bool {
+    modal := NewInputModal(&window.Window, prompt, ok, cancel, map[string]string{})
     modal.Draw()
     defer window.Draw()
 
@@ -330,4 +503,18 @@ func (window *MainWindow) RequestConfirmation(prompt string) bool {
 
     success := ModalEventLoop(window, modal)
     return success
+}
+
+func (window *MainWindow) RequestOptionSelection(prompt string, options []string) int {
+    modal := NewOptionModal(&window.Window, prompt, options)
+    modal.Draw()
+    defer window.Draw()
+
+    modal.UpdateFromSelection()
+
+    success := OptionModalEventLoop(window, modal)
+    if success {
+        return modal.GetOptionValue()
+    }
+    return -1
 }

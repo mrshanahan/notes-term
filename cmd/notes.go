@@ -2,13 +2,14 @@ package main
 
 import (
     "bytes"
+    "crypto/sha256"
     "flag"
     "fmt"
     "io"
     "os"
     "os/exec"
     "path/filepath"
-    "time"
+    // "time"
     // "strings"
 
     term "golang.org/x/term"
@@ -28,7 +29,7 @@ var (
 )
 
 const (
-    TEMP_FILE_ROOT = "/tmp/notes/"
+    TEMP_FILE_ROOT = "/var/cache/notes-term/"
 )
 
 func OpenEditor(path string) {
@@ -40,32 +41,94 @@ func OpenEditor(path string) {
     }
 }
 
-func createTempFile(content []byte) (string, error) {
+type LocalCopyResult struct {
+    Path string
+    IsCancelled bool
+    OpenReadOnly bool
+}
+
+func cancelledResult() *LocalCopyResult {
+    return &LocalCopyResult{IsCancelled:true}
+}
+
+func createLocalNoteCopy(window *w.MainWindow, remoteContent []byte) (*LocalCopyResult, error) {
     err := os.MkdirAll(TEMP_FILE_ROOT, 0770)
     if err != nil {
-        return "", err
+        return nil, err
     }
 
-    f, err := os.CreateTemp(TEMP_FILE_ROOT, "note*")
+    hash := getContentHash(remoteContent)
+    path := getTempFilePath(hash)
+
+    f, err := getIfExists(path)
     if err != nil {
-        return "", err
+        return nil, err
     }
-    defer f.Close()
-    path := f.Name()
 
-    r := bytes.NewReader(content)
+    if f != nil {
+        // TODO: Extract this out & make it available to main event loop
+        finfo, err := f.Stat()
+        modtime := finfo.ModTime()
+        msg := fmt.Sprintf("An unsaved draft for this note was found locally. Continue editing? (Last edited: %s)", modtime)
+        selection := window.RequestOptionSelection(msg, []string{"Edit", "View (read-only)", "Discard", "Cancel"})
+        switch (selection) {
+        case 0: // Edit
+            return &LocalCopyResult{Path:path}, nil
+        case 1: // View (read-only)
+            return &LocalCopyResult{Path:path, OpenReadOnly:true}, nil
+        case 2: // Discard
+            err = os.Remove(path)
+            if err != nil {
+                return nil, err
+            }
+        case 3, -1: // Cancel
+            return &LocalCopyResult{IsCancelled:true}, nil
+        default:
+            return nil, fmt.Errorf("unexpected option choice for dealing with local copies: %d", selection)
+        }
+    }
+
+    // NB: We should be here if 1) the file did not exist or 2) we discarded it.
+
+    // If file already exists we've done something wrong, so just
+    // we include O_EXCL here to fail fast
+    f, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0660)
+    if err != nil {
+        return nil, err
+    }
+
+    defer f.Close()
+
+    r := bytes.NewReader(remoteContent)
     _, err = io.Copy(f, r)
     if err != nil {
         _ = os.Remove(path)
-        return "", err
+        return nil, err
     }
 
-    return path, nil
+    return &LocalCopyResult{Path:path}, nil
 }
 
-func newTempFileName() string {
-    x := time.Now().UnixMilli()
-    return fmt.Sprintf("note%015d.txt", x)
+func getContentHash(content []byte) string {
+    h := sha256.New()
+    h.Write(content)
+    return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+func getTempFilePath(hash string) string {
+    // x := time.Now().UnixMilli()
+    // return fmt.Sprintf("note%015d.txt", x)
+    name := fmt.Sprintf("note-%s.txt", hash)
+    path := filepath.Join(TEMP_FILE_ROOT, name)
+    return path
+}
+
+func getIfExists(path string) (*os.File, error) {
+    f, err := os.Open(path)
+    if err != nil && os.IsNotExist(err) {
+        return nil, nil
+    }
+    return f, err
 }
 
 func initState() (*w.MainWindow, func()) {
@@ -173,22 +236,27 @@ func main() {
             if err != nil {
                 window.ShowErrorBox(err)
             } else {
-                path, err := createTempFile(content)
+                // TODO: This should be a formal cache of some sort, maybe a local DB with the hash + contents
+                result, err := createLocalNoteCopy(window, content)
                 if err != nil {
                     window.ShowErrorBox(fmt.Errorf("error when creating temp file: %w", err))
-                } else {
+                } else if !result.IsCancelled {
+                    path := result.Path
                     OpenEditor(path)
 
                     newContent, err := os.ReadFile(path)
                     if err == nil {
-                        if newContent != nil && len(newContent) > 0 {
+                        if result.OpenReadOnly {
+                            window.ShowInfoBox("File was opened as read-only and so was not saved.")
+                        } else {
                             err := client.UpdateNoteContent(note.ID, newContent)
                             if err != nil {
                                 window.ShowErrorBox(err)
+                            } else {
+                                _ = os.Remove(path)
                             }
                         }
                     }
-                    _ = os.Remove(path)
                 }
             }
             w.HideCursor()

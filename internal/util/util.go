@@ -34,6 +34,16 @@ func Max(xs ...int) *Maybe[int] {
     return res
 }
 
+func Min(xs ...int) *Maybe[int] {
+    var res *Maybe[int]
+    for _, x := range xs {
+        if res == nil || x < res.Value {
+            res = Just(x)
+        }
+    }
+    return res
+}
+
 type Maybe[T any] struct {
     Value T
 }
