@@ -17,7 +17,9 @@ import (
 	// termios "github.com/pkg/term/termios"
 	// unix "golang.org/x/sys/unix"
 
+	"mrshanahan.com/notes-term/internal/auth"
 	w "mrshanahan.com/notes-term/internal/window"
+
 	// "mrshanahan.com/notes-term/internal/notes"
 
 	nc "github.com/mrshanahan/notes-api/pkg/client"
@@ -142,8 +144,21 @@ func getIfExists(path string) (*os.File, error) {
 	return f, err
 }
 
+func exitWithFatalError(err error) {
+	w.Move(0, 0)
+	w.ClearScreen()
+	fmt.Fprintf(os.Stderr, "error: %s\n", err) // TODO: fix weird % at end of line
+	os.Exit(-1)
+}
+
 func initState(url string) (*w.MainWindow, func()) {
-	client = nc.NewClient(url)
+	auth.InitializeAuth()
+	token, err := auth.Login()
+	if err != nil {
+		exitWithFatalError(err) // TODO: better error message
+	}
+
+	client = nc.NewClient(url, token)
 
 	fd := os.Stdin.Fd()
 	w.DisableEcho(fd)
@@ -152,35 +167,37 @@ func initState(url string) (*w.MainWindow, func()) {
 
 	oldState, err := term.MakeRaw(int(fd))
 	if err != nil {
-		panic(err)
+		// term.Restore(int(fd), oldState)
+		w.ShowCursor()
+		exitWithFatalError(err) // TODO: better error message
 	}
 	// defer term.Restore(int(fd), oldState)
 
 	w.ClearScreen()
 	termw, termh, err := term.GetSize(int(fd))
 	if err != nil {
-		panic(err)
+		term.Restore(int(fd), oldState)
+		w.ShowCursor()
+		exitWithFatalError(err) // TODO: better error message
 	}
 
 	w.HideCursor()
 	// defer ShowCursor()
 
-	w.SetPalette(w.DefaultPalette)
-	// defer ResetBackgroundColor()
-
 	notes, err := client.ListNotes()
 	if err != nil {
-		panic(err)
+		term.Restore(int(fd), oldState)
+		w.ShowCursor()
+		exitWithFatalError(err) // TODO: better error message
 	}
 
+	w.SetPalette(w.DefaultPalette)
 	window := w.NewMainWindow(termw, termh, notes)
 	window.Draw()
 
 	return window, func() {
 		term.Restore(int(fd), oldState)
 		w.ShowCursor()
-		// This might not be needed - everything seems to work w/o it
-		// ResetBackgroundColor()
 	}
 }
 
