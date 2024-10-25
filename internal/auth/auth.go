@@ -18,7 +18,7 @@ type Config struct {
 }
 
 func buildAuthConfig(context context.Context) *Config {
-	baseProviderUrl := "http://localhost:8080/realms/myrealm"
+	baseProviderUrl := "https://auth.notes.quemot.dev/realms/notes"
 	provider, err := oidc.NewProvider(context, baseProviderUrl)
 	if err != nil {
 		panic("Could not load OIDC configuration: " + err.Error())
@@ -26,7 +26,7 @@ func buildAuthConfig(context context.Context) *Config {
 
 	config := &Config{
 		KeycloakLoginConfig: oauth2.Config{
-			ClientID: "test-notes-cli",
+			ClientID: "notes-cli",
 			Endpoint: provider.Endpoint(),
 			Scopes:   []string{"profile", "email", oidc.ScopeOpenID},
 		},
@@ -48,6 +48,7 @@ func Login() (*oauth2.Token, error) {
 		return nil, err
 	}
 
+	// TODO: Can we make this check loop tighter?
 	completeUrl := deviceAuth.VerificationURIComplete
 	if completeUrl != "" {
 		fmt.Printf("> Visit the following URL to complete login: %s\n", completeUrl)

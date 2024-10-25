@@ -203,7 +203,7 @@ func initState(url string) (*w.MainWindow, func()) {
 
 func main() {
 	var debugFlag *bool = flag.Bool("debug", false, "Enable debugging features")
-	var urlParam *string = flag.String("url", "http://localhost:3333/", "Base URL for the Notes API service")
+	var urlParam *string = flag.String("url", "https://notes.quemot.dev/", "Base URL for the Notes API service")
 	flag.Parse()
 
 	w.Debug = *debugFlag
