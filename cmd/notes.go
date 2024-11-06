@@ -18,6 +18,7 @@ import (
 	// unix "golang.org/x/sys/unix"
 
 	"mrshanahan.com/notes-term/internal/auth"
+	"mrshanahan.com/notes-term/internal/paths"
 	w "mrshanahan.com/notes-term/internal/window"
 
 	// "mrshanahan.com/notes-term/internal/notes"
@@ -45,16 +46,8 @@ type LocalCopyResult struct {
 	OpenReadOnly bool
 }
 
-func ensureLocalCacheFolder() (string, error) {
-	var path = filepath.Join(os.Getenv("HOME"), ".notes-term")
-	if err := os.MkdirAll(path, 0770); err != nil {
-		return "", err
-	}
-	return path, nil
-}
-
 func ensureDraftsRoot() (string, error) {
-	cacheDir, err := ensureLocalCacheFolder()
+	cacheDir, err := paths.EnsureLocalCacheFolder()
 	if err != nil {
 		return "", err
 	}

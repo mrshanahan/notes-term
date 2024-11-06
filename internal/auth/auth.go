@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
@@ -42,6 +43,15 @@ func InitializeAuth() {
 }
 
 func Login() (*oauth2.Token, error) {
+	token, err := LoadToken()
+	if err != nil {
+		return nil, err
+	}
+
+	if IsValid(token) {
+		return token, nil
+	}
+
 	ctx := context.Background()
 	deviceAuth, err := clientAuthConfig.KeycloakLoginConfig.DeviceAuth(ctx)
 	if err != nil {
@@ -58,9 +68,14 @@ func Login() (*oauth2.Token, error) {
 	}
 	fmt.Printf("\n> Waiting for login (expires at: %s)...\n", deviceAuth.Expiry.Local())
 
-	token, err := clientAuthConfig.KeycloakLoginConfig.DeviceAccessToken(ctx, deviceAuth)
+	token, err = clientAuthConfig.KeycloakLoginConfig.DeviceAccessToken(ctx, deviceAuth)
 	if err != nil {
 		return nil, err // TODO: Better error message here?
+	}
+
+	err = SaveToken(token)
+	if err != nil {
+		slog.Warn("could not save token", "error", err)
 	}
 
 	return token, nil
